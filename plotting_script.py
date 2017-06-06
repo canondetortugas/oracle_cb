@@ -30,8 +30,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--save', dest='save', action='store_true')
 Args = parser.parse_args(sys.argv[1:])
 
-D1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
-D2 = Plotting.read_dir("./results/yahoo_T=40000_L=2_e=0.5/")
+D1 = Plotting.read_dir("./results/mslr30k_T=20000_L=3_e=0.0/")
+D2 = Plotting.read_dir("./results/mslr30k_T=20000_L=3_e=0.0/")
+#D1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
+#D2 = Plotting.read_dir("./results/yahoo_T=40000_L=2_e=0.5/")
 
 
 print(mpl.rcParams['figure.figsize'])

@@ -1,11 +1,16 @@
 import settings
 import numpy as np
 
-flist = [settings.DATA_DIR+"mslr/mslr30k_train1.txt",
-         settings.DATA_DIR+"mslr/mslr30k_train2.txt",
-         settings.DATA_DIR+"mslr/mslr30k_train3.txt",
-         settings.DATA_DIR+"mslr/mslr30k_train4.txt",
-         settings.DATA_DIR+"mslr/mslr30k_train5.txt"]
+# flist = [settings.DATA_DIR+"mslr/mslr30k_train1.txt",
+         # settings.DATA_DIR+"mslr/mslr30k_train2.txt",
+         # settings.DATA_DIR+"mslr/mslr30k_train3.txt",
+         # settings.DATA_DIR+"mslr/mslr30k_train4.txt",
+         # settings.DATA_DIR+"mslr/mslr30k_train5.txt"]
+flist = [settings.DATA_DIR+"mslr/mslr30k_vali1.txt",
+         settings.DATA_DIR+"mslr/mslr30k_vali2.txt",
+         settings.DATA_DIR+"mslr/mslr30k_vali3.txt",
+         settings.DATA_DIR+"mslr/mslr30k_vali4.txt",
+         settings.DATA_DIR+"mslr/mslr30k_vali5.txt"]
 
 def preprocess():
     fidx = 0
@@ -104,7 +109,7 @@ def preprocess():
         processed[queryid] += 1
         relevances[queryid,docIndex] = relevance
         features[queryid,docIndex,:] = fvec
-    np.savez_compressed(settings.DATA_DIR+'mslr/mslr30k_train.npz', relevances=relevances,
+    np.savez_compressed(settings.DATA_DIR+'mslr/mslr30k_vali.npz', relevances=relevances,
                         features = features, docsPerQuery = docsPerQuery, queryOrder = order)
     print("Datasets:loadTxt [INFO] Loaded"
           " [Min,Max]NumDocs: ", np.min(docsPerQuery), np.max(docsPerQuery), flush = True)
