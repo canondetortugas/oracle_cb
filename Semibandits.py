@@ -7,6 +7,8 @@ from Policy import *
 import Argmax
 import pickle
 
+import Incremental
+
 """
 Module of Semibandit algorithms
 """
@@ -115,11 +117,11 @@ class RegressorUCB(Semibandit):
         B -- Semibandit Simulator
         learning_alg -- scikit learn regression algorithm.
                         Should support fit() and predict() methods.
+        TODO: Product of regressors vs. general regressor as an argument.
         """
         self.B = B
         if self.B.L is not 1:
-            raise NotImplementedError('Semibandit functionality not implemented')
-            
+            raise NotImplementedError('Semibandit functionality not implemented')    
         
 
      def init(self, T, params={}):
@@ -127,6 +129,7 @@ class RegressorUCB(Semibandit):
         Initialize the semibandit algorithm for a run.
         Args:
         T -- maximum number of rounds.
+
         """
         
         self.T = T ## max # rounds
@@ -187,12 +190,45 @@ class RegressorUCB(Semibandit):
             
         if self.t in self.training_points and self.t > self.burn_in:
             
-            # TODO Change this part to be incremental.
-            self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
+            # TODO Build regressor for each action
             
-            Y_pred = self.leader.model.predict(X)
+            m = len(self.history)
             
-            self.leader_square_loss = metrics.mean_squared_error(Y, Y_pred)
+            # (Xs, Ys) -- sub-datasets split accoridng to which action was taken.
+            
+            Xs = [np.zeros((m, self.B.d)) for idx in range(self.B.K)]
+            Ys = [np.zeros(m) for idx in range(self.B.K)]
+            subset_sizes = np.zeros(self.B.K)
+            
+            for item in self.history:
+                context = item[0]
+                act = item[1][0] ### Assumes K = 1
+                reward = item[2]
+                weight = item[3]
+                
+                ss = self.subset_sizes[act]
+                Xs[act][ss] = context.get_ld_features()[act,:]
+                Ys[act][ss] = reward[act]
+                
+                subset_sizes[act] += 1
+                
+            self.leaders = []    
+                
+            for idx in range(self.B.K):
+                Xs[idx] = Xs[idx][:subset_sizes[idx]]
+                Ys[idx] = Ys[idx][:subset_sizes[idx]]
+            
+                pred = learning_alg()
+                pred.fit(Xs[idx], Ys[idx])
+                
+                self.leaders.append(RegressionPolicy(pred, (Xs[idx], Ys[idx], None)))
+                
+            
+            # self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
+            
+            # Y_pred = self.leader.model.predict(X)
+            
+            # self.leader_square_loss = metrics.mean_squared_error(Y, Y_pred)
             
             self.training_indices.append(len(self.history)-1) # mark index into history where we updated.
         
@@ -209,47 +245,121 @@ class RegressorUCB(Semibandit):
         
     def get_action(self, x):
         """
-        Pick a composite action to play for this context. 
+        Pick a action to play for this context. 
 
         Args:
         x -- context
 
         Returns:
-        Composite action (np.array of length L)
+        Action (np.array of length L)
         """
         
         if self.t <= self.burn_in:
             act = np.random.choice(self.B.K, size=1, replace=False)
             self.imp_weights = np.ones(self.B.K)/float(self.B.K)
             self.uncertain_t = self.t**2
-            self.acttion = act
+            self.action = act
             return act
         
+        # Upper and lower reward ranges predicted by regressors
         upper_range = np.zeros(self.B.K)
         lower_range = np.zeros(self.B.K)
         
+        
+        
         ######
         # compute confidence ranges
-        # TODO double check for loss dependent contexts.
         
-        # Easiest approach in the linear case: Add my own custom linear regression model. with a .incremental(...) method that supports incremental updates. (ie, call .incremental(new loss and weight) and get update.
-        # Note need to be able to fit for *each possible action*.
+        for idx in range(self.B.K):
+            
+            # RegressionPolicy wrapping an IncrementalRegressionModel class.
+            leader = self.leaders[idx]
+        
+            # context features for current action
+            xa=context.get_ld_features()[idx,:]
+            
+            model = leader.model
+            m=model.get_dataset_size()
+            
+            # Binary search
+            # TODO: Get range params from the model
+            rmax = 1.
+            rmin = -1.
+            prec = 0.1
+            
+            lmin = prec
+            lmax = m/prec
+            
+            radius = self.delta
+            
+            leader_mse = m.get_mse()
+            
+            r_upper = self._binary_search(model, xa, radius, rmax, (lmin, lmax), leader_mse)
+            r_lower = self._binary_search(model, xa, radius, rmin, (lmin, lmax), leader_mse)
+            
+            upper_range[idx] = r_upper
+            lower_range[idx] = r_lower
+            
         ######
         
-        uncertain = # TODO:
+        # TODO: Add option: Greedy arm pull vs. pull when confused.
+        
+        max_lower = np.max(lower_range)
+        
+        possible_winners = []
+        
+        for idx in range(self.B.K):
+            
+             if upper_range[idx] >= max_lower:
+                possible_winners.append(idx)
+                
+        
+        uncertain = (len(possible_winners) > 1)
         
         if uncertain:
-            self.uncertain_t = self.t # TODO: set flag if we played randomly.
-            act = np.random.choice(x.get_K(), size=1, replace=False)
-            
-            # TODO (Note size of confused set)
-            self.imp_weights = ??? # uniform over confused set
+            self.uncertain_t = self.t # Set flag if we played randomly
+            act = np.random.choice(x.get_K(), size=1, replace=False)           
+
+            #self.imp_weights = ??? # uniform over confused set
         else:
-            # TODO action that maximizes upper confidence range
-        
+            act = possible_winners[0]
+            
 
         self.action = act
         return self.action
+        
+    def _binary_search(self, model, x, radius, r, (lmin, lmax), min_mse):
+        '''
+        r -- Range we would like the regressor class to try to match
+        model --- is assumed to be an IncrementalRegressionModel
+        '''
+        
+        ll = lmin
+        lh = lmax
+        
+        lt = None
+            
+        while lh - ll > radius:
+                
+            lt = (ll + lh)/2.
+                
+            (past_mse, full_mse) = model.fit_incremental(x, r, weight=1./lt, keep=False)
+                
+            if past_mse > min_mse + radius:
+                ll = lt
+            else:
+                lh = lt 
+                
+        # No optimization performed because precision was too low. (should never happen if prec < 1)
+        if lt is None:
+            val = model.predict(xa)
+            return val
+        else:
+            # Value of MSE optimization problem
+            val = lt*(full_mse - min_mse - radius)
+            # convert to cost
+            return 1. - np.sqrt(val)
+        
 
 class EpsGreedy(Semibandit):
     """
@@ -781,7 +891,7 @@ if __name__=='__main__':
     parser.add_argument('--L', action='store', default=5, type=int)
     parser.add_argument('--I', action='store', default=0, type=int)
     parser.add_argument('--noise', action='store', default=None)
-    parser.add_argument('--alg', action='store' ,default='all', choices=['mini', 'eps', 'lin'])
+    parser.add_argument('--alg', action='store' ,default='all', choices=['mini', 'eps', 'lin', 'rucb'])
     parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'tree', 'lin'])
     parser.add_argument('--param', action='store', default=None)
     
@@ -832,7 +942,35 @@ if __name__=='__main__':
         learning_alg = lambda: sklearn.tree.DecisionTreeRegressor(max_depth=2)
     elif Args.learning_alg == "lin":
         learning_alg = lambda: sklearn.linear_model.LinearRegression()
-
+    
+    if Args.alg == "rucb":
+        if Args.learning_alg == 'lin':
+            learning_alg = lambda: Incremental.IncrementalLinearRegression(reg=1.)
+        else
+            assert False, "not implemented"
+        
+        R = RegressorUCB(B, learning_alg=learning_alg)
+        if Args.param is not None:
+            if os.path.isfile(outdir+"rucb_%0.5f_rewards_%d.out" % (Args.param,Args.I)):
+                print('---- ALREADY DONE ----')
+                sys.exit(0)
+            start = time.time()
+            # TODO: Change param string writing
+            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=Bval, params={'delta': Args.param})
+            stop = time.time()
+            np.savetxt(outdir+"rucb_%0.5f_rewards_%d.out" % (Args.param,Args.I), r)
+            np.savetxt(outdir+"rucb_%0.5f_validation_%d.out" % (Args.param,Args.I), val_tmp)
+            np.savetxt(outdir+"rucb_%0.5f_time_%d.out" % (Args.param, Args.I), np.array([stop-start]))
+        else:
+            if os.path.isfile(outdir+"lin_default_rewards_%d.out" % (Args.I)):
+                print('---- ALREADY DONE ----')
+                sys.exit(0)
+            start = time.time()
+            (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval)
+            stop = time.time()
+            np.savetxt(outdir+"lin_default_rewards_%d.out" % (Args.I), r)
+            np.savetxt(outdir+"lin_default_validation_%d.out" % (Args.I), val_tmp)
+            np.savetxt(outdir+"lin_default_time_%d.out" % (Args.I), np.array([stop-start]))
     if Args.alg == "lin":
         L = LinUCB(B)
         if Args.param is not None:

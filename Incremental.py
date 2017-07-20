@@ -28,16 +28,28 @@ class IncrementalModel():
         
         pass
         
+    def get_dataset_size(self):
+        '''
+        Return size of the dataset the model was fit on (if it was fit)
+        '''
+        pass
+        
+
+        
 class IncrementalRegressionModel(IncrementalModel):
 
-    def get_mse():
+    def get_mse(self):
         '''
         If the model has been fit, return MSE. Otherwise None
         '''
         
         pass
-        
-        
+    
+    def get_range(self):
+        '''
+        Return max and min values this regressor class can produce.
+        '''    
+            
 class IncrementalLinearRegression(IncrementalRegressionModel):
 
     def __init__(self, reg = 0):
@@ -45,6 +57,12 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         self.reg = reg
         
         self.is_fit = False
+        
+    def get_dataset_size(self):
+        
+        assert self.is_fit
+        
+        return self.n
         
     def fit(self, X, y, weights = None):
         
@@ -74,9 +92,17 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         # (parameter vector)
         self.theta = self.A.dot(self.b)
         
+        self.mse = self.weights.dot((self.X.dot(self.theta)- self.y)**2)
+        
         self.is_fit = True
         
         return
+        
+    def get_mse(self):
+    
+        assert self.is_fit
+        
+        return self.mse
         
     def fit_incremental(self, x, y , weight = 1., keep = False):
         
