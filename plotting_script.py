@@ -30,11 +30,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--save', dest='save', action='store_true')
 Args = parser.parse_args(sys.argv[1:])
 
-D1 = Plotting.read_dir("./results/mslr30k_T=20000_L=3_e=0.0/")
-D2 = Plotting.read_dir("./results/mslr30k_T=20000_L=3_e=0.0/")
+D1 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
+D2 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
 #D1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
 #D2 = Plotting.read_dir("./results/yahoo_T=40000_L=2_e=0.5/")
-
+print(D1[0].items())
 
 print(mpl.rcParams['figure.figsize'])
 fig = plt.figure(figsize=(mpl.rcParams['figure.figsize'][0]*2, mpl.rcParams['figure.figsize'][1]-1))
@@ -117,15 +117,15 @@ plt.rc('font', family='sans-serif')
 ## Ax1 is MSLR
 ticks=ax1.get_yticks()
 print(ticks)
-ax1.set_ylim(2.15, 2.35)
+#ax1.set_ylim(2.15, 2.35)
 print("Setting ylim to %0.2f, %0.2f" % (ticks[3], ticks[len(ticks)-2]))
 ticks = ax1.get_yticks()
 print(ticks)
 ticks = ["", "", "2.2", "", "2.3", ""]
-ax1.set_yticklabels(ticks,size=20)
+#ax1.set_yticklabels(ticks,size=20)
 ticks = ['', '', '10000', '', '20000', '', '30000']
-ax1.set_xlim(1000, 31000)
-ax1.set_xticklabels(ticks,size=20)
+#ax1.set_xlim(1000, 31000)
+#ax1.set_xticklabels(ticks,size=20)
 
 # Ax2 is Yahoo!
 ticks=ax2.get_yticks()
@@ -149,7 +149,7 @@ for legobj in leg.legendHandles:
     legobj.set_linewidth(4.0)
 
 plt.sca(ax1)
-tt1 = plt.title('Dataset: MSLR',fontsize=18)
+tt1 = plt.title('Dataset: MSLR30k',fontsize=18)
 tt1.set_position([0.5, 1.02])
 plt.sca(ax2)
 tt2 = plt.title('Dataset: Yahoo!',fontsize=18)

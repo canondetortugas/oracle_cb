@@ -29,7 +29,7 @@ class EnumerationPolicy(Policy):
 class RegressionPolicy(Policy):
     """
     A RegressionPolicy object holds a sklearn model and can be used to get actions.
-    Models should be regression models
+    Models should be regression models. Only accesses model through the .predict() method.
     """
     def __init__(self, model):
         self.model = model

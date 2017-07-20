@@ -98,7 +98,7 @@ def argmax2(B, dataset, policy_type=RegressionPolicy,learning_alg=None):
     pred = learning_alg()
     pred.fit(X,y,sample_weight=w)
     ## Return a policy
-    return RegressionPolicy(pred)
+    return (RegressionPolicy(pred), (X, y, w))
 
 def weighted_argmax(B,dataset,weights,link="linear", policy_type=EnumerationPolicy,learning_alg=None,intercept=0.0):
     if policy_type == EnumerationPolicy:

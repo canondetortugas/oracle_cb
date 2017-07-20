@@ -60,8 +60,8 @@ class Semibandit(object):
             if x == None:
                 break
             p = self.get_action(x)
-            r = self.B.get_slate_reward(p)
-            o = self.B.get_best_reward()
+            r = self.B.get_slate_reward(p) ## cumulative reward of action subset selected
+            o = self.B.get_best_reward() # Best instantaneous reward
             # if verbose:
             #     print('context: ', x.get_name())
             #     print('action: ', " ".join([str(x) for x in p]))
@@ -105,6 +105,151 @@ class Semibandit(object):
         # p = int(np.nonzero(p)[0])
         # return p
 
+class RegressorUCB(Semibandit):
+    """
+    """
+    def __init__(self, B, learning_alg):
+        """
+        Initialize object
+        Args:
+        B -- Semibandit Simulator
+        learning_alg -- scikit learn regression algorithm.
+                        Should support fit() and predict() methods.
+        """
+        self.B = B
+        if self.B.L is not 1:
+            raise NotImplementedError('Semibandit functionality not implemented')
+            
+        
+
+     def init(self, T, params={}):
+        """
+        Initialize the semibandit algorithm for a run.
+        Args:
+        T -- maximum number of rounds.
+        """
+        
+        self.T = T ## max # rounds
+        self.t = 1 ## current round
+        self.burn_in = 10 ## how many rounds before we start using algorithm
+        
+        # points in time at which we do a full batch optimization
+        self.training_points = []
+        self.training_indices = [] #indices into history where we did full batch optimization
+
+        self.uncertain_t = None ## last time we were uncertain about the best action for a given context.
+        
+        t = 1
+        while t <= T:
+            self.training_points.append(t)
+            t *=2
+        
+        self.reward = []
+        self.opt_reward = []
+#        self.dist = [1.0/self.B.N for i in range(self.B.N)]
+        
+        # Datapoints we've added to the dataset so far. In general size will be < self.t because we do not add at every round
+        self.history = []
+        
+        # Alg confidence parameters
+        
+        self.beta = 0.1 ## safety parameter
+        self.failure_prob = 0.05 ## failure probability
+        self.nu = np.log(2*T**2*self.B.K/self.failure_prob) ## ignoring class G size
+        self.kappa = 80
+        self.eps = self.T**(self.beta)*self.nu
+        self.delta = 1 ## arbitrary, updated at each timestep
+
+   def update_confidence(i):
+        self.eta = 1./np.sqrt(i)
+        self.delta = self.kappa*self.eps/(float(i)-1)
+        self.eps = (self.T/float(i))**(self.beta)*self.nu
+        return
+       
+   def update(self, x, act, y_vec, r):
+        """
+        Update the state of the semibandit algorithm with the most recent
+        context, composite action, and reward.
+
+        Note: Currently assumes that x is same as x given as argument to get_action.
+
+        Args:
+        x -- context (should be hashable)
+        a -- composite action (np.array of length L)
+        y_vec -- reward of current action (non-slate setting)
+        r -- reward vector (np.array of length K)
+        """
+
+        if self.uncertain_t is not None and self.uncertain_t == self.t:
+            full_rvec = np.zeros(self.B.K)
+            full_rvec[act] = y_vec ##/self.imp_weights[act]
+            self.history.append((x, act, full_rvec, np.ones(self.B.K))) # add current context to dataset. Last element of tuple is treated as weights by argmax2
+            
+        if self.t in self.training_points and self.t > self.burn_in:
+            
+            # TODO Change this part to be incremental.
+            self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
+            
+            Y_pred = self.leader.model.predict(X)
+            
+            self.leader_square_loss = metrics.mean_squared_error(Y, Y_pred)
+            
+            self.training_indices.append(len(self.history)-1) # mark index into history where we updated.
+        
+        self.t += 1
+        
+        self.update_confidence(self.t) ## update confidence parameters
+
+
+    def _min_reward(self):
+        pass
+    
+    def _max_reward(self):
+        pass
+        
+    def get_action(self, x):
+        """
+        Pick a composite action to play for this context. 
+
+        Args:
+        x -- context
+
+        Returns:
+        Composite action (np.array of length L)
+        """
+        
+        if self.t <= self.burn_in:
+            act = np.random.choice(self.B.K, size=1, replace=False)
+            self.imp_weights = np.ones(self.B.K)/float(self.B.K)
+            self.uncertain_t = self.t**2
+            self.acttion = act
+            return act
+        
+        upper_range = np.zeros(self.B.K)
+        lower_range = np.zeros(self.B.K)
+        
+        ######
+        # compute confidence ranges
+        # TODO double check for loss dependent contexts.
+        
+        # Easiest approach in the linear case: Add my own custom linear regression model. with a .incremental(...) method that supports incremental updates. (ie, call .incremental(new loss and weight) and get update.
+        # Note need to be able to fit for *each possible action*.
+        ######
+        
+        uncertain = # TODO:
+        
+        if uncertain:
+            self.uncertain_t = self.t # TODO: set flag if we played randomly.
+            act = np.random.choice(x.get_K(), size=1, replace=False)
+            
+            # TODO (Note size of confused set)
+            self.imp_weights = ??? # uniform over confused set
+        else:
+            # TODO action that maximizes upper confidence range
+        
+
+        self.action = act
+        return self.action
 
 class EpsGreedy(Semibandit):
     """
@@ -252,6 +397,9 @@ class EpsGreedy(Semibandit):
         Return the current value of epsilon.
         """
         return np.max([1.0/np.sqrt(self.t), self.eps])
+        
+
+
 
 class LinUCB(Semibandit):
     """
@@ -322,163 +470,6 @@ class LinUCB(Semibandit):
         return ranks[K-self.B.L:K]
 
 
-class EELS(Semibandit):
-    """
-    Implementation of GLM-Semibandit with scikit_learn learning algorithm as the AMO.
-    """
-    def __init__(self, B):
-        self.B = B
-        self.learning_alg = "enumerate"
-        self.link = "linear"
-
-    def init(self, T, params=None):
-        if 'learning_alg' in params.keys():
-            self.learning_alg = params['learning_alg']
-        if 'link' in params.keys():
-            self.link = params['link']
-        if self.learning_alg == 'enumerate':
-            assert 'Pi' in dir(self.B), "No learning algorithm but simulator has no policies!"
-            self.policy_type = EnumerationPolicy
-        else:
-            self.policy_type = RegressionPolicy
-
-        self.lambda_star = np.sqrt(self.B.K*T)                                     ## TODO: maybe needs to change
-        self.t_star = (T*self.B.K/self.B.L)**(2.0/3)*(1.0/self.B.L)**(1.0/3)       ## TODO: maybe needs to change
-        self.reward = []
-        self.opt_reward = []
-        self.weights = None
-        self.cov = np.matrix(np.zeros((self.B.L, self.B.L)))
-        self.reg_data = []
-        self.T = T
-        self.action = None
-        self.imp_weights = None
-        self.t = 1
-        self.history = []
-        self.emp_best = None
-
-        self.reward = []
-        self.opt_reward = []
-
-    def get_action(self, x):
-        if self.weights is None:
-            act = np.random.choice(x.get_K(), size=x.get_L(), replace=False)
-            self.action = act
-        else:
-            self.action = self.emp_best.get_weighted_action(x,self.weights)
-        return self.action
-
-    def update(self, x, act, y_vec, r):
-        if self.emp_best != None:
-            return
-        ## Otherwise we have to update
-        vec = y_vec
-        full_rvec = np.zeros(x.get_K())
-        full_rvec[act] = y_vec*(self.B.L/self.B.K)*np.ones(len(act))
-        self.history.append((x,full_rvec))
-        self.cov += np.matrix(vec).T*np.matrix(vec)
-        self.reg_data.append((np.matrix(vec).T, r))
-        [u,v] = np.linalg.eig(self.cov)
-        if np.min(np.real(u)) > self.lambda_star and self.t > self.t_star:
-            if self.verbose:
-                print("---- Training ----", flush=True)
-            if self.link == "linear":
-                model = sklearn.linear_model.LinearRegression(fit_intercept=True)
-                X = np.matrix(np.hstack([self.reg_data[i][0] for i in range(len(self.reg_data))])).T
-                y = np.hstack([self.reg_data[i][1] for i in range(len(self.reg_data))])
-                model.fit(X,y)
-                self.weights = np.array(model.coef_)[0,:]
-            if self.link == "logistic":
-                model = sklearn.linear_model.LogisticRegression(C=1000.0,fit_intercept=True)
-                X = np.matrix(np.hstack([self.reg_data[i][0] for i in range(len(self.reg_data))])).T
-                y = np.hstack([self.reg_data[i][1] for i in range(len(self.reg_data))])
-                model.fit(X,y)
-                self.weights = np.array(model.coef_)[0,:]
-            self.emp_best = Argmax.weighted_argmax(self.B,self.history,self.weights, link=self.link, policy_type=self.policy_type, learning_alg=self.learning_alg)
-        self.t += 1
-
-class EELS2(Semibandit):
-    """
-    Implementation of GLM-Semibandit with scikit_learn learning algorithm as the AMO.
-    """
-    def __init__(self, B):
-        self.B = B
-        self.learning_alg = "enumerate"
-        self.link = "linear"
-
-    def init(self, T, params=None):
-        if "eps" in params.keys():
-            self.eps = params['eps']
-        else:
-            self.eps = 0.1
-        if 'learning_alg' in params.keys():
-            self.learning_alg = params['learning_alg']
-        if 'link' in params.keys():
-            self.link = params['link']
-        if self.learning_alg == 'enumerate':
-            assert 'Pi' in dir(self.B), "No learning algorithm but simulator has no policies!"
-            self.policy_type = EnumerationPolicy
-        else:
-            self.policy_type = RegressionPolicy
-
-        self.reward = []
-        self.opt_reward = []
-        self.weights = None
-        self.cov = np.matrix(np.zeros((self.B.L, self.B.L)))
-        self.reg_data = []
-        self.T = T
-        self.action = None
-        self.t = 1
-        self.history = []
-        self.emp_best = None
-
-        self.reward = []
-        self.opt_reward = []
-
-    def get_action(self, x):
-        self.ber = np.random.binomial(1,np.min([1,self._get_eps()]))
-        if self.weights is None or self.ber:
-            act = np.random.choice(x.get_K(), size=x.get_L(), replace=False)
-            self.action = act
-        else:
-            self.action = self.emp_best.get_weighted_action(x,self.weights)
-        return self.action
-
-    def update(self, x, act, y_vec, r):
-        ## Otherwise we have to update
-        vec = y_vec
-        full_rvec = np.zeros(x.get_K())
-        full_rvec[act] = y_vec*(self.B.L/self.B.K)*np.ones(len(act))
-        if self.ber:
-            self.history.append((x,full_rvec))
-        self.cov += np.matrix(vec).T*np.matrix(vec)
-        self.reg_data.append((np.matrix(vec).T, r))
-        if self.t >= 10 and np.log2(self.t) == int(np.log2(self.t)):
-            if self.verbose:
-                print("---- Training ----", flush=True)
-            if self.link == "linear":
-                model = sklearn.linear_model.LinearRegression(fit_intercept=True)
-                X = np.matrix(np.hstack([self.reg_data[i][0] for i in range(len(self.reg_data))])).T
-                y = np.hstack([self.reg_data[i][1] for i in range(len(self.reg_data))])
-                model.fit(X,y)
-                ## print(model.coef_)
-                self.weights = np.array(model.coef_)
-                self.intercept = model.intercept_
-            if self.link == "logistic":
-                model = sklearn.linear_model.LogisticRegression(C=1000.0,fit_intercept=True)
-                X = np.matrix(np.hstack([self.reg_data[i][0] for i in range(len(self.reg_data))])).T
-                y = np.hstack([self.reg_data[i][1] for i in range(len(self.reg_data))])
-                model.fit(X,y)
-                self.weights = np.array(model.coef_)[0,:]
-                self.intercept = model.intercept_
-                print(self.weights)
-            self.emp_best = Argmax.weighted_argmax(self.B,self.history,self.weights, link=self.link, policy_type=self.policy_type, learning_alg=self.learning_alg, intercept=self.intercept)
-        self.t += 1
-
-    def _get_eps(self):
-        """
-        Return the current value of epsilon.
-        """
-        return np.max([1.0/np.sqrt(self.t), self.eps])
 
 class MiniMonster(Semibandit):
     """
@@ -773,80 +764,6 @@ class MiniMonster(Semibandit):
         return p
 
 
-class SemiExp4(Semibandit):
-    """
-    Semibandit EXP4 as in Kale, Reyzin, Schapire.
-    Uses parameters prescribed in the paper.
-
-    This only works for Semibandit Simulators where there
-    is a finite enumerable policy class. To get this to
-    work on the Learning-to-Rank datasets, you need to construct
-    such a policy class before hand and make it accessible to the 
-    SemibanditSim object. 
-
-    Specifically the algorithm uses B.Pi, which is a multidimensional
-    array for which B.Pi[policy, context, :] is the prescribed composite
-    action. The SemibanditSim object needs to have this structure.
-    """
-    
-    def __init__(self, B):
-        assert "Pi" in dir(B), "Cannot run EXP4 without explicit policy class"
-        self.B = B
-        self.link = "linear"
-
-    def init(self, T, params={}):
-        self.reward = []
-        self.opt_reward = []
-        self.dist = [1.0/self.B.N for i in range(self.B.N)]
-        self.T = T
-        ## Default parameter settings from the paper
-        ## self.gamma = np.sqrt((self.B.K/self.B.L)*np.log(self.B.N)/self.T)
-        if 'gamma' in params.keys():
-            self.gamma = params['gamma']
-        else:
-            self.gamma = np.sqrt((self.B.K/self.B.L)*np.log(self.B.N)/self.T)
-        if 'eta' in params.keys():
-            self.eta = params['eta']
-        else:
-            self.eta = np.sqrt((1-self.gamma)*self.B.L*np.log(self.B.N)/(self.B.K*self.T))
-        self.act_dist = []
-        self.action = None
-        self.weight = np.ones(self.B.L)
-        if 'weight' in params.keys():
-            self.weight = params['weight']
-        if 'link' in params.keys():
-            self.link = params['link']
-
-    def update(self, x, act, y_vec, r):
-        """
-        This step enumerates the policy class. 
-        """
-        reward = np.zeros(self.B.K)
-        reward[act] = y_vec/(self.B.L*self.act_dist[act])
-        
-        for n in range(self.B.N):
-            if self.link == "linear":
-                policy_reward = np.dot(self.weight,reward[self.B.Pi[n].get_action(x)])
-            if self.link == "logistic":
-                policy_reward = 1.0/(1+np.exp(-np.dot(self.weight, reward[self.B.Pi[n].get_action(x)])))
-            self.dist[n] = self.dist[n]*np.exp(self.eta*policy_reward)
-        self.dist = self.dist/np.sum(self.dist)
-
-    def get_action(self,x):
-        """
-        This also enumerates the policy class. 
-        """
-        p = np.zeros(self.B.K)
-        for n in range(self.B.N):
-            p[self.B.Pi[n].get_action(x)] += self.dist[n]/self.B.L
-        p = (1-self.gamma)*p + self.gamma/self.B.K*np.ones(self.B.K)
-        self.act_dist = p
-        (M, z) = mixture_decomp(p, self.B.L)
-        samp = np.random.multinomial(1, z)
-        row = M[np.where(samp)[0][0],:]
-        self.action = np.where(row)[0]
-        return(self.action)
-
 
 if __name__=='__main__':
     import sklearn.ensemble
@@ -892,19 +809,19 @@ if __name__=='__main__':
     if Args.dataset != 'yahoo':
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
 
-    if Args.dataset == 'mslr30k' and Args.I < 20:
-        order = np.load(settings.DATA_DIR+"mslr/mslr30k_train_%d.npz" % (Args.I))
-        print("Setting order for Iteration %d" % (Args.I), flush=True)
-        B.contexts.order = order['order']
-        B.contexts.curr_idx = 0
-    if Args.dataset == 'yahoo' and Args.I < 20:
-        order = np.load(settings.DATA_DIR+"yahoo/yahoo_train_%d.npz" % (Args.I))
-        print("Setting order for Iteration %d" % (Args.I), flush=True)
-        B.contexts.order = order['order']
-        B.contexts.curr_idx = 0
+    # if Args.dataset == 'mslr30k' and Args.I < 20:
+        # order = np.load(settings.DATA_DIR+"mslr/mslr30k_train_%d.npz" % (Args.I))
+        # print("Setting order for Iteration %d" % (Args.I), flush=True)
+        # B.contexts.order = order['order']
+        # B.contexts.curr_idx = 0
+    # if Args.dataset == 'yahoo' and Args.I < 20:
+        # order = np.load(settings.DATA_DIR+"yahoo/yahoo_train_%d.npz" % (Args.I))
+        # print("Setting order for Iteration %d" % (Args.I), flush=True)
+        # B.contexts.order = order['order']
+        # B.contexts.curr_idx = 0
 
-    print("Setting seed for Iteration %d" % (Args.I), flush=True)
-    B.set_seed(Args.I)
+    # print("Setting seed for Iteration %d" % (Args.I), flush=True)
+    # B.set_seed(Args.I)
 
     learning_alg = None
     if Args.learning_alg == "gb2":

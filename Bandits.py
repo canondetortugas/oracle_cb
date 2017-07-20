@@ -47,38 +47,3 @@ class Bandit(object):
         p = np.random.multinomial(1, dist) ## Distribution over ACTIONS
         p = int(np.nonzero(p)[0])
         return p
-
-class BFTPL(Bandit):
-    """
-    Follow the perturbed leader style bandit algorithm. 
-
-    @deprecated: This needs to be tuned properly, so should not be
-    used.
-    """
-    def init(self,T):
-        self.reward = 0.0
-        self.weights = np.array([0 for i in range(self.B.N)])
-        self.noise = np.random.normal(0, 1, [1,self.B.N])
-        self.eta = np.sqrt(T)
-
-    def update(self, x, a, r):
-        ## Estimate probability of playing action a
-        ## so that we can importance weight
-        counts = [0.0 for i in range(self.B.K)]
-        for n in range(1000):
-            noise = np.random.normal(0, 1, [1,self.B.N])
-            pi = self.argmax(noise)
-            counts[self.B.Pi[pi, x]] += 1
-        counts = [x/1000 for x in counts]
-        
-        print("Updating policies: action %d, reward %d, IPS %0.2f" % (a, r, counts[a]))
-        for i in range(self.B.N):
-            if self.B.Pi[i,x] == a:
-                self.weights[i] += r/counts[a]
-
-    def get_action(self,x):
-        pi = self.argmax(self.noise)
-        return self.B.Pi[pi,x]
-
-    def argmax(self, noise):
-         return np.argmax(self.weights + self.eta*noise)
