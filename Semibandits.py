@@ -148,6 +148,7 @@ class RegressorUCB(Semibandit):
         """
 
         self.pull_strategy = 'greedy'
+        # self.pull_strategy = 'pull_if_uncertain'
         
         self.T = T ## max # rounds
         self.t = 1 ## current round
@@ -247,15 +248,15 @@ class RegressorUCB(Semibandit):
                 Xs[idx] = Xs[idx][:subset_sizes[idx]]
                 Ys[idx] = Ys[idx][:subset_sizes[idx]]
             
-                print("Action {} data:".format(idx))
-                print(Xs[idx])
-                print(Ys[idx])
+                # print("Action {} data:".format(idx))
+                # print(Xs[idx])
+                # print(Ys[idx])
 
                 pred = learning_alg()
                 pred.fit(Xs[idx], Ys[idx])
                 
                 self.leaders.append(RegressionPolicy(pred))
-                print(pred.theta)
+                # print(pred.theta)
                 
             
             # self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
@@ -324,7 +325,7 @@ class RegressorUCB(Semibandit):
             lmin = prec
             # lmax = m/prec
             lmax = m+prec
-            print(m)
+            # print(m)
             
             radius = self.delta
             
@@ -333,8 +334,8 @@ class RegressorUCB(Semibandit):
             r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
             r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
 
-            print("Action {} confidence range:".format(idx))
-            print((r_upper, r_lower))
+            # print("Action {} confidence range:".format(idx))
+            # print((r_upper, r_lower))
 
             # assert r_upper >= r_lower, (r_upper, r_lower, model.theta, leader_mse, self.t)
             if r_upper < r_lower:
@@ -408,7 +409,8 @@ class RegressorUCB(Semibandit):
                 
             lt = (ll + lh)/2.
             # print(1./lt)
-            (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
+            # (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
+            (pred, past_mse, full_mse) = model.fit_incremental(x, r, weight=1./lt, keep=False)
             # print(1./lt)
             # print(min_mse)
             # print(ll, lh)
