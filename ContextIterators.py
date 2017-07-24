@@ -446,5 +446,47 @@ class XORContextIterator(object):
         curr_r = np.array([features[i,0]*features[i,1] for i in range(self.K)])
         self.curr_idx += 1
         return (curr_x, curr_r)
+
+class StaticLinearContextIterator(object):
+    def __init__(self, loop=True, *args, **kwargs):
+        '''
+        Ignores all arguments except loop
+        '''
+
+        self.d = 10
+        self.K = 5
+        self.L = 1
+        self.has_ldf = True
+        self.curr_idx = 0
+        self.loop = loop
+
+        # print('loop: {}'.format(self.loop))
+
+        self.theta = np.concatenate((np.arange(self.K)/(self.K-1), np.zeros(self.d-self.K)))
+
+        self.length = 200
+
+    def next(self):
+        """
+        Generate a new context with ld_features that are uniform 1/0
+        and with reward that is x_1 XOR x_2
+        """
+        
+        if self.curr_idx > self.length and self.loop is False:
+            return None
+
+        # if self.loop == False and self.curr_idx > 200:
+        #     return None
+        # features = np.matrix(np.zeros([self.K, self.d]))
+        # features = np.matrix(np.random.binomial(1, 0.5, [self.K, self.d]))
+        # features = 2*features-1
+        features = np.eye(self.K, self.d)
+
+        curr_x = Context.Context(self.curr_idx, features, self.K, self.L)
+        # curr_r = np.array([features[i,0]*features[i,1] for i in range(self.K)])n
+        curr_r = features.dot(self.theta)
+        
+        self.curr_idx += 1
+        return (curr_x, curr_r)    
     
     

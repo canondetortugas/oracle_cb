@@ -49,10 +49,22 @@ class Semibandit(object):
         self.init(T, params=params)
         self.val_scores = []
         for t in range(T):
-            if t != 0 and np.log2(t+1) == int(np.log2(t+1)) and verbose:
-                print("t = %d, r = %0.3f, ave_regret = %0.3f" % (t, np.cumsum(self.reward)[len(self.reward)-1], (np.cumsum(self.opt_reward) - np.cumsum(self.reward))[len(self.reward)-1]/(t+1)), flush=True)
-                if "num_unif" in dir(self):
-                    print("num_unif = %d" % (self.num_unif))
+            if t != 0 and t % 10 == 0 and verbose:
+                print("t = %d, r = %0.3f, ave_regret = %0.3f" % (t, np.cumsum(self.reward)[len(self.reward)-1],
+                                                                 (np.cumsum(self.opt_reward) - np.cumsum(self.reward))[len(self.reward)-1]/(t+1)), flush=True)
+
+                # if self.leaders is not None:
+                #     print([leader.model.weights for leader in self.leaders])
+                # print(self.cov)
+
+                # if "num_unif" in dir(self):
+                #     print("num_unif = %d" % (self.num_unif))
+                
+                print(self.subset_sizes)
+                # if self.upper_range is not None:
+                #     print(np.array(self.upper_range) - np.array(self.lower_range))
+                # print(self.lower_range)
+                
             if validate != None and t != 0 and t % 500 == 0:
                 val = validate.offline_evaluate(self, train=False)
                 if verbose:
@@ -110,6 +122,9 @@ class Semibandit(object):
 class RegressorUCB(Semibandit):
     """
     """
+
+    STRATEGIES= ['greedy', 'pull_if_uncertain']
+
     def __init__(self, B, learning_alg):
         """
         Initialize object
@@ -124,27 +139,36 @@ class RegressorUCB(Semibandit):
             raise NotImplementedError('Semibandit functionality not implemented')    
         
 
-     def init(self, T, params={}):
+    def init(self, T, params={}):
         """
         Initialize the semibandit algorithm for a run.
         Args:
         T -- maximum number of rounds.
 
         """
+
+        self.pull_strategy = 'greedy'
         
         self.T = T ## max # rounds
         self.t = 1 ## current round
-        self.burn_in = 10 ## how many rounds before we start using algorithm
+        self.burn_in = 20 ## how many rounds before we start using algorithm
         
         # points in time at which we do a full batch optimization
         self.training_points = []
         self.training_indices = [] #indices into history where we did full batch optimization
 
+        self.leaders = None
+
         self.uncertain_t = None ## last time we were uncertain about the best action for a given context.
+
+        self.subset_sizes = None
+        self.upper_range = None
+        self.lower_range = None
         
         t = 1
-        while t <= T:
-            self.training_points.append(t)
+    #    burn_in = 20
+        while t + self.burn_in <= T:
+            self.training_points.append(self.burn_in + t)
             t *=2
         
         self.reward = []
@@ -163,13 +187,13 @@ class RegressorUCB(Semibandit):
         self.eps = self.T**(self.beta)*self.nu
         self.delta = 1 ## arbitrary, updated at each timestep
 
-   def update_confidence(i):
+    def update_confidence(self, i):
         self.eta = 1./np.sqrt(i)
         self.delta = self.kappa*self.eps/(float(i)-1)
         self.eps = (self.T/float(i))**(self.beta)*self.nu
         return
        
-   def update(self, x, act, y_vec, r):
+    def update(self, x, act, y_vec, r):
         """
         Update the state of the semibandit algorithm with the most recent
         context, composite action, and reward.
@@ -188,9 +212,9 @@ class RegressorUCB(Semibandit):
             full_rvec[act] = y_vec ##/self.imp_weights[act]
             self.history.append((x, act, full_rvec, np.ones(self.B.K))) # add current context to dataset. Last element of tuple is treated as weights by argmax2
             
-        if self.t in self.training_points and self.t > self.burn_in:
-            
-            # TODO Build regressor for each action
+        if self.t in self.training_points: #and self.t > self.burn_in:
+
+            print("training. (t={})".format(self.t))
             
             m = len(self.history)
             
@@ -198,19 +222,24 @@ class RegressorUCB(Semibandit):
             
             Xs = [np.zeros((m, self.B.d)) for idx in range(self.B.K)]
             Ys = [np.zeros(m) for idx in range(self.B.K)]
-            subset_sizes = np.zeros(self.B.K)
+            subset_sizes = [0 for idx in range(self.B.K)]
             
             for item in self.history:
                 context = item[0]
+                # print(item)
+                # print(item[1])
+                
                 act = item[1][0] ### Assumes K = 1
                 reward = item[2]
                 weight = item[3]
                 
-                ss = self.subset_sizes[act]
+                ss = subset_sizes[act]
                 Xs[act][ss] = context.get_ld_features()[act,:]
                 Ys[act][ss] = reward[act]
                 
                 subset_sizes[act] += 1
+
+            self.subset_sizes = subset_sizes
                 
             self.leaders = []    
                 
@@ -218,10 +247,15 @@ class RegressorUCB(Semibandit):
                 Xs[idx] = Xs[idx][:subset_sizes[idx]]
                 Ys[idx] = Ys[idx][:subset_sizes[idx]]
             
+                print("Action {} data:".format(idx))
+                print(Xs[idx])
+                print(Ys[idx])
+
                 pred = learning_alg()
                 pred.fit(Xs[idx], Ys[idx])
                 
-                self.leaders.append(RegressionPolicy(pred, (Xs[idx], Ys[idx], None)))
+                self.leaders.append(RegressionPolicy(pred))
+                print(pred.theta)
                 
             
             # self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
@@ -254,10 +288,10 @@ class RegressorUCB(Semibandit):
         Action (np.array of length L)
         """
         
-        if self.t <= self.burn_in:
+        if self.t <= self.training_points[0]:
             act = np.random.choice(self.B.K, size=1, replace=False)
             self.imp_weights = np.ones(self.B.K)/float(self.B.K)
-            self.uncertain_t = self.t**2
+            self.uncertain_t = self.t
             self.action = act
             return act
         
@@ -276,7 +310,7 @@ class RegressorUCB(Semibandit):
             leader = self.leaders[idx]
         
             # context features for current action
-            xa=context.get_ld_features()[idx,:]
+            xa=x.get_ld_features()[idx,:]
             
             model = leader.model
             m=model.get_dataset_size()
@@ -285,80 +319,121 @@ class RegressorUCB(Semibandit):
             # TODO: Get range params from the model
             rmax = 1.
             rmin = -1.
-            prec = 0.1
+            prec = 0.01 # TODO: Set based on gamma
             
             lmin = prec
-            lmax = m/prec
+            # lmax = m/prec
+            lmax = m+prec
+            print(m)
             
             radius = self.delta
             
-            leader_mse = m.get_mse()
+            leader_mse = model.get_mse()
             
-            r_upper = self._binary_search(model, xa, radius, rmax, (lmin, lmax), leader_mse)
-            r_lower = self._binary_search(model, xa, radius, rmin, (lmin, lmax), leader_mse)
+            r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
+            r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+
+            print("Action {} confidence range:".format(idx))
+            print((r_upper, r_lower))
+
+            # assert r_upper >= r_lower, (r_upper, r_lower, model.theta, leader_mse, self.t)
+            if r_upper < r_lower:
+                # import ipdb
+                from IPython import embed
+                embed()
             
             upper_range[idx] = r_upper
             lower_range[idx] = r_lower
+
+        self.upper_range = upper_range
+        self.lower_range = lower_range
             
         ######
         
         # TODO: Add option: Greedy arm pull vs. pull when confused.
-        
-        max_lower = np.max(lower_range)
-        
-        possible_winners = []
-        
-        for idx in range(self.B.K):
-            
-             if upper_range[idx] >= max_lower:
-                possible_winners.append(idx)
-                
-        
-        uncertain = (len(possible_winners) > 1)
-        
-        if uncertain:
-            self.uncertain_t = self.t # Set flag if we played randomly
-            act = np.random.choice(x.get_K(), size=1, replace=False)           
 
-            #self.imp_weights = ??? # uniform over confused set
-        else:
-            act = possible_winners[0]
+        if self.pull_strategy == 'pull_if_uncertain':
+        
+            max_lower = np.max(lower_range)
+        
+            possible_winners = []
+        
+            for idx in range(self.B.K):
             
+                if upper_range[idx] >= max_lower:
+                    possible_winners.append(idx)
+        
+            assert len(possible_winners) > 0
 
+            uncertain = (len(possible_winners) > 1)
+
+                # TODO: Only declare uncertain if gap exceeds gamma
+        
+            if uncertain:
+                self.uncertain_t = self.t # Set flag if we played randomly
+                # print(possible_winners)
+                act = np.array([possible_winners[np.random.choice(len(possible_winners))]])
+
+                #self.imp_weights = ??? # uniform over confused set
+            else:
+                act = np.array([possible_winners[0]])
+
+        elif self.pull_strategy == 'greedy':
+            act = np.array([np.argmax(upper_range)])
+
+            # Add context to the dataset even though we pulled greedily
+            self.uncertain_t = self.t
+            
         self.action = act
         return self.action
         
-    def _binary_search(self, model, x, radius, r, (lmin, lmax), min_mse):
+    def _binary_search(self, model, x, radius, r, prec, lmin, lmax, min_mse):
         '''
-        r -- Range we would like the regressor class to try to match
+        r -- Value (eg 1 for max cost, 0 for min cost) value we would like the regressor class to try to match
         model --- is assumed to be an IncrementalRegressionModel
         '''
         
+        # print("Binary search, r={}".format(r))
+
         ll = lmin
         lh = lmax
         
         lt = None
-            
-        while lh - ll > radius:
+
+        it = 0
+        
+        while lh - ll > prec:
+            # print("binary search iteration {}, gap {}, prec {}".format(it, lh - ll, prec))
+            it += 1
                 
             lt = (ll + lh)/2.
-                
-            (past_mse, full_mse) = model.fit_incremental(x, r, weight=1./lt, keep=False)
-                
-            if past_mse > min_mse + radius:
+            # print(1./lt)
+            (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
+            # print(1./lt)
+            # print(min_mse)
+            # print(ll, lh)
+            # print(1./lt)
+            # print(pred, model.get_mse(), past_mse, full_mse)
+            # print(lt)
+
+            # If model has regularization or isn't optimized well, we can have past_mse < min_mse.
+            if max(past_mse- min_mse, 0) > radius:
                 ll = lt
             else:
                 lh = lt 
                 
-        # No optimization performed because precision was too low. (should never happen if prec < 1)
+        # No optimization was performed because precision was too low. (should never happen if prec < 1)
         if lt is None:
-            val = model.predict(xa)
+            val = model.predict(x)
             return val
         else:
-            # Value of MSE optimization problem
-            val = lt*(full_mse - min_mse - radius)
-            # convert to cost
-            return 1. - np.sqrt(val)
+            val = pred
+            # # Value of MSE optimization problem
+            # val = lt*(full_mse - min_mse - radius)
+#            print("val {}".format(val))
+            # # convert to cost
+            # return 1. - np.sqrt(val)
+            return val
         
 
 class EpsGreedy(Semibandit):
@@ -508,7 +583,6 @@ class EpsGreedy(Semibandit):
         """
         return np.max([1.0/np.sqrt(self.t), self.eps])
         
-
 
 
 class LinUCB(Semibandit):
@@ -887,7 +961,7 @@ if __name__=='__main__':
     parser.add_argument('--T', action='store',
                         default=1000,
                         help='number of rounds', type=int)
-    parser.add_argument('--dataset', action='store', choices=['synth','mq2007','mq2008', 'yahoo', 'mslr', 'mslrsmall', 'mslr30k', 'xor'])
+    parser.add_argument('--dataset', action='store', choices=['synth','mq2007','mq2008', 'yahoo', 'mslr', 'mslrsmall', 'mslr30k', 'xor', 'static_linear'])
     parser.add_argument('--L', action='store', default=5, type=int)
     parser.add_argument('--I', action='store', default=0, type=int)
     parser.add_argument('--noise', action='store', default=None)
@@ -916,8 +990,13 @@ if __name__=='__main__':
 
     B = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=loop, metric=None, noise=Args.noise)
     Bval = None
-    if Args.dataset != 'yahoo':
+    if Args.dataset == 'static_linear':
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
+    else:
+        Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
+    
+    # if Args.dataset != 'yahoo':
+    #     Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
 
     # if Args.dataset == 'mslr30k' and Args.I < 20:
         # order = np.load(settings.DATA_DIR+"mslr/mslr30k_train_%d.npz" % (Args.I))
@@ -946,8 +1025,10 @@ if __name__=='__main__':
     if Args.alg == "rucb":
         if Args.learning_alg == 'lin':
             learning_alg = lambda: Incremental.IncrementalLinearRegression(reg=1.)
-        else
+        else:
             assert False, "not implemented"
+        
+        print('Using RegressorUCB with model {}'.format(Args.learning_alg))
         
         R = RegressorUCB(B, learning_alg=learning_alg)
         if Args.param is not None:
@@ -956,21 +1037,23 @@ if __name__=='__main__':
                 sys.exit(0)
             start = time.time()
             # TODO: Change param string writing
-            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=Bval, params={'delta': Args.param})
+            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=None)
             stop = time.time()
+            # TODO: Don't write param string
             np.savetxt(outdir+"rucb_%0.5f_rewards_%d.out" % (Args.param,Args.I), r)
             np.savetxt(outdir+"rucb_%0.5f_validation_%d.out" % (Args.param,Args.I), val_tmp)
             np.savetxt(outdir+"rucb_%0.5f_time_%d.out" % (Args.param, Args.I), np.array([stop-start]))
         else:
-            if os.path.isfile(outdir+"lin_default_rewards_%d.out" % (Args.I)):
+            if os.path.isfile(outdir+"rucb_default_rewards_%d.out" % (Args.I)):
                 print('---- ALREADY DONE ----')
                 sys.exit(0)
             start = time.time()
-            (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval)
+            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=Bval)
             stop = time.time()
-            np.savetxt(outdir+"lin_default_rewards_%d.out" % (Args.I), r)
-            np.savetxt(outdir+"lin_default_validation_%d.out" % (Args.I), val_tmp)
-            np.savetxt(outdir+"lin_default_time_%d.out" % (Args.I), np.array([stop-start]))
+            np.savetxt(outdir+"rucb_default_rewards_%d.out" % (Args.I), r)
+            np.savetxt(outdir+"rucb_default_validation_%d.out" % (Args.I), val_tmp)
+            np.savetxt(outdir+"rucb_default_time_%d.out" % (Args.I), np.array([stop-start]))
+
     if Args.alg == "lin":
         L = LinUCB(B)
         if Args.param is not None:

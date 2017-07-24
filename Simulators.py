@@ -376,7 +376,8 @@ class DatasetBandit(SemibanditSim):
         'mslrsmall': ContextIterators.MSLRSmall,
         'mslr30k': ContextIterators.MSLR30k,
         'yahoo': ContextIterators.YahooContextIterator,
-        'xor': ContextIterators.XORContextIterator
+        'xor': ContextIterators.XORContextIterator,
+        'static_linear': ContextIterators.StaticLinearContextIterator
         }
 
     def __init__(self, L=5, loop=False, dataset="letter", metric=Metrics.NDCG, structure="none", noise=0.1):
@@ -390,6 +391,7 @@ class DatasetBandit(SemibanditSim):
         self.noise_rate = noise
         self.gaussian = True
         self.seed = None
+        self.loop = loop
 
         if self.structure == "cluster":
             self.contexts.cluster_docs()
@@ -484,7 +486,7 @@ class DatasetBandit(SemibanditSim):
 
     def offline_evaluate(self, policy, T=None, train=True):
         score = 0.0
-        context_iter = DatasetBandit.DATASETS[self.dataset](train=train,L=self.L)
+        context_iter = DatasetBandit.DATASETS[self.dataset](train=train,L=self.L, loop=self.loop)
         t = 0
         while True:
             if T is not None and t >= T:

@@ -1,0 +1,20 @@
+## MSLR 30K setup (exactly one pass over whole dataset (31278 docs w/ geq 10 actions) with LinUCB)
+
+python Semibandits.py --T 31278 --dataset mslr30k --L 1 --alg lin --param 0.1
+
+## Same as above with epsilon-greedy and linear oracle
+
+python Semibandits.py --T 31278 --dataset mslr30k --L 1 --alg eps --learning_alg lin --param 0.1
+
+## New regression alg with linear oracle
+
+python Semibandits.py --T 2000 --dataset mslr30k --L 1 --alg rucb --learning_alg lin --param 0.1
+
+## New regression alg with linear oracle and fake linear dataset
+
+python Semibandits.py --T 5000 --dataset static_linear --L 1 --alg rucb --learning_alg lin
+
+
+t = 4990, r = 4612.750, ave_regret = 0.076
+[162, 140, 152, 137, 121]
+[ 0.09294963  0.09944378  0.09499067  0.09671136  0.04984345]

@@ -78,7 +78,6 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
             self.weights = weights
         else:
             self.weights = np.ones(self.n)
-       
         self.X = X
         self.y = y
         
@@ -129,16 +128,78 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         
         past_pred = self.X.dot(theta)
         
+        pred = theta.dot(x)
+
         past_mse = self.weights.dot((past_pred - self.y)**2)
         full_mse = past_mse + weight*(x.dot(theta) - y)**2
         
-        return (past_mse, full_mse)
-        
-    def predict(self, X):
+        return (pred, past_mse, full_mse)
+
+    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+        '''
+        Test version of fit_incremental that refits the whole dataset
+        '''
         
         assert self.is_fit
         
-        assert X.shape[1] == self.data
+        # if keep is False:
+        #     A = self.A.copy()
+        #     b = self.b.copy()
+        # else:
+        #     A = self.A
+        #     b = self.b
+        
+        # update using sherman morrison (only works if A is invertible -- can be incorrect if regularization is turned off).
+
+        Xp = np.vstack((self.X, x))
+        yp = np.concatenate((self.y, [y]))
+        wp = np.concatenate((self.weights, [weight]))
+        
+        # z = A.dot(x)
+        
+        # A = A - weight*np.outer(z, z)/(1 + weight*x.dot(z))
+        
+        # b = b + weight*x*y
+        
+        # theta = A.dot(b)
+
+        W = np.diag(wp)
+                
+        A = np.eye(self.d)*self.reg + Xp.transpose().dot(W.dot(Xp))
+        A = la.pinv(A)
+        
+        b = Xp.transpose().dot(W.dot(yp))
+        
+        # (parameter vector)
+        theta = A.dot(b)
+        
+        if keep is True:
+            self.theta = theta
+            self.A = A
+            self.b = b
+            self.weights = wp
+            self.X = Xp
+            self.y = yp
+        
+        past_pred = self.X.dot(theta)
+        
+        pred = theta.dot(x)
+
+        past_mse = self.weights.dot((past_pred - self.y)**2)
+        full_mse = past_mse + weight*(x.dot(theta) - y)**2
+        
+        return (pred, past_mse, full_mse)
+    
+    def predict(self, X):
+        
+        assert self.is_fit
+
+        if len(X.shape)==1:
+            assert X.shape[0] == self.d
+        elif len(X.shape) ==2:
+            assert X.shape[1] == self.d
+        else:
+            assert False, "not implemented"
         
         return X.dot(self.theta)
         
