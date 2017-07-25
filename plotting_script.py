@@ -13,7 +13,8 @@ Names = {
     'epsall_gb2': '$\epsilon$-GB2',
     'epsall_gb5': '$\epsilon$-GB5',
     'epsall_lin': '$\epsilon$-Lin',
-    'lin': 'LinUCB'
+    'lin': 'LinUCB',
+    'rucb_lin': 'RUCB-Lin'
 }
 
 Styles = {
@@ -23,7 +24,8 @@ Styles = {
     'epsall_gb2': ['k', 'dashed'],
     'epsall_gb5': ['r', 'dashed'],
     'epsall_lin': ['g', 'dashed'],
-    'lin': ['b', 'solid']
+    'lin': ['b', 'solid'],
+    'rucb_lin': ['g', 'solid'],
     }
 
 parser = argparse.ArgumentParser()
@@ -51,7 +53,7 @@ ax.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='of
 
 std = True
 legendHandles = []
-keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin']
+keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin', 'rucb_lin']
 for k in keys:
     params = []
     mus = []

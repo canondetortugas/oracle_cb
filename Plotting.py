@@ -32,7 +32,8 @@ Names = {
     'lin': 'LinUCB',
     'epsall_nn': 'EpsAllNN',
     'eps_nn': 'EpsNN',
-    'mini_nn': 'VCNN'
+    'mini_nn': 'VCNN',
+    'rucb_lin': 'RUCB-Lin'
 }
 def PlotLinearExperiment(out):
     ks = [k for k in out.keys()]

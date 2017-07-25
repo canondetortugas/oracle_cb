@@ -60,7 +60,7 @@ class Semibandit(object):
                 # if "num_unif" in dir(self):
                 #     print("num_unif = %d" % (self.num_unif))
                 
-                print(self.subset_sizes)
+                # print(self.subset_sizes)
                 # if self.upper_range is not None:
                 #     print(np.array(self.upper_range) - np.array(self.lower_range))
                 # print(self.lower_range)
@@ -167,10 +167,12 @@ class RegressorUCB(Semibandit):
         self.lower_range = None
         
         t = 1
-    #    burn_in = 20
+        # while t + self.burn_in <= T:
+        #     self.training_points.append(self.burn_in + t)
+        #     t *=2
         while t + self.burn_in <= T:
             self.training_points.append(self.burn_in + t)
-            t *=2
+            t += 100
         
         self.reward = []
         self.opt_reward = []
@@ -323,16 +325,20 @@ class RegressorUCB(Semibandit):
             prec = 0.01 # TODO: Set based on gamma
             
             lmin = prec
+            # lmin = 1
             # lmax = m/prec
-            lmax = m+prec
+            lmax = m+prec      #
+            # lmax = 10
             # print(m)
             
             radius = self.delta
             
             leader_mse = model.get_mse()
             
-            r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
-            r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+            # r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
+            # r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+
+            (r_lower, r_upper) = model.pred_range(xa, radius)
 
             # print("Action {} confidence range:".format(idx))
             # print((r_upper, r_lower))
@@ -394,7 +400,7 @@ class RegressorUCB(Semibandit):
         model --- is assumed to be an IncrementalRegressionModel
         '''
         
-        # print("Binary search, r={}".format(r))
+        print("Binary search, r={}".format(r))
 
         ll = lmin
         lh = lmax
@@ -404,25 +410,30 @@ class RegressorUCB(Semibandit):
         it = 0
         
         while lh - ll > prec:
-            # print("binary search iteration {}, gap {}, prec {}".format(it, lh - ll, prec))
-            it += 1
+
+
                 
             lt = (ll + lh)/2.
-            # print(1./lt)
-            # (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
+
+            (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
             (pred, past_mse, full_mse) = model.fit_incremental(x, r, weight=1./lt, keep=False)
             # print(1./lt)
             # print(min_mse)
             # print(ll, lh)
             # print(1./lt)
-            # print(pred, model.get_mse(), past_mse, full_mse)
+            print("binary search iteration {}, gap {}, prec {}".format(it, lh - ll, prec))
+            print(1./lh, 1./ll)
+            print(1./lt)            
+            print(pred, model.get_mse(), past_mse, full_mse)
             # print(lt)
 
             # If model has regularization or isn't optimized well, we can have past_mse < min_mse.
             if max(past_mse- min_mse, 0) > radius:
                 ll = lt
             else:
-                lh = lt 
+                lh = lt
+
+            it += 1
                 
         # No optimization was performed because precision was too low. (should never happen if prec < 1)
         if lt is None:
@@ -628,6 +639,11 @@ class LinUCB(Semibandit):
         Update the regression target and feature cov. 
         """
         features = np.matrix(x.get_ld_features())
+
+        # for idx in range(features.shape[0]):
+        #     if np.linalg.norm(features[idx,:]) != 0:
+        #         features[idx,:] = features[idx,:]/np.linalg.norm(features[idx,:])
+        
         for i in range(len(A)):
             self.cov += features[A[i],:].T*features[A[i],:]
             self.b_vec += y_vec[i]*features[A[i],:].T
@@ -994,6 +1010,8 @@ if __name__=='__main__':
     Bval = None
     if Args.dataset == 'static_linear':
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
+    elif Args.dataset == 'mslr30k':
+        Bval = None
     else:
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
     
@@ -1034,7 +1052,7 @@ if __name__=='__main__':
         
         R = RegressorUCB(B, learning_alg=learning_alg)
         if Args.param is not None:
-            if os.path.isfile(outdir+"rucb_%0.5f_rewards_%d.out" % (Args.param,Args.I)):
+            if os.path.isfile(outdir+"rucb_%s_%0.5f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I)):
                 print('---- ALREADY DONE ----')
                 sys.exit(0)
             start = time.time()
@@ -1042,19 +1060,19 @@ if __name__=='__main__':
             (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=None)
             stop = time.time()
             # TODO: Don't write param string
-            np.savetxt(outdir+"rucb_%0.5f_rewards_%d.out" % (Args.param,Args.I), r)
-            np.savetxt(outdir+"rucb_%0.5f_validation_%d.out" % (Args.param,Args.I), val_tmp)
-            np.savetxt(outdir+"rucb_%0.5f_time_%d.out" % (Args.param, Args.I), np.array([stop-start]))
+            np.savetxt(outdir+"rucb_%s_%0.5f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
+            np.savetxt(outdir+"rucb_%s_%0.5f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
+            np.savetxt(outdir+"rucb_%s_%0.5f_time_%d.out" % (Args.learning_alg, Args.param, Args.I), np.array([stop-start]))
         else:
-            if os.path.isfile(outdir+"rucb_default_rewards_%d.out" % (Args.I)):
+            if os.path.isfile(outdir+"rucb_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I)):
                 print('---- ALREADY DONE ----')
                 sys.exit(0)
             start = time.time()
             (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=Bval)
             stop = time.time()
-            np.savetxt(outdir+"rucb_default_rewards_%d.out" % (Args.I), r)
-            np.savetxt(outdir+"rucb_default_validation_%d.out" % (Args.I), val_tmp)
-            np.savetxt(outdir+"rucb_default_time_%d.out" % (Args.I), np.array([stop-start]))
+            np.savetxt(outdir+"rucb_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
+            np.savetxt(outdir+"rucb_%s_default_validation_%d.out" % (Args.learning_alg, Args.I), val_tmp)
+            np.savetxt(outdir+"rucb_%s_default_time_%d.out" % (Args.learning_alg, Args.I), np.array([stop-start]))
 
     if Args.alg == "lin":
         L = LinUCB(B)

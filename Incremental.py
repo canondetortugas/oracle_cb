@@ -202,7 +202,26 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
             assert False, "not implemented"
         
         return X.dot(self.theta)
+
+    def pred_range(self, x, delta):
+
+        assert self.is_fit
+
+        mid = self.theta.dot(x)
         
+        half_width = np.sqrt(x.dot(self.A.dot(x)))*np.sqrt(delta)
+
+        return (mid - half_width, mid + half_width)
+
+    def pred_range_coarse(self, x, delta):
+        assert self.is_fit
+
+        mid = self.theta.dot(x)
+        
+        half_width = np.linalg.norm(x)*np.sqrt(delta)/self.reg
+
+        return (mid - half_width, mid + half_width)
+
       
 class IncrementalRegressionTree(IncrementalRegressionModel):
 
