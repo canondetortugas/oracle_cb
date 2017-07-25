@@ -84,12 +84,12 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         W = np.diag(self.weights)
         
         self.A = np.eye(self.d)*self.reg + self.X.transpose().dot(W.dot(self.X))
-        self.A = la.pinv(self.A)
+        self.Ainv = la.pinv(self.A)
         
         self.b = self.X.transpose().dot(W.dot(self.y))
         
         # (parameter vector)
-        self.theta = self.A.dot(self.b)
+        self.theta = self.Ainv.dot(self.b)
         
         self.mse = self.weights.dot((self.X.dot(self.theta)- self.y)**2)
         
@@ -109,30 +109,37 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         
         if keep is False:
             A = self.A.copy()
+            Ainv = self.Ainv.copy()
             b = self.b.copy()
         else:
             A = self.A
+            Ainv = self.Ainv
             b = self.b
         
         # update using sherman morrison (only works if A is invertible -- can be incorrect if regularization is turned off).
-        z = A.dot(x)
+        z = Ainv.dot(x)
         
-        A = A - weight*np.outer(z, z)/(1 + weight*x.dot(z))
-        
+        Ainv = Ainv - weight*np.outer(z, z)/(1 + weight*x.dot(z))
+
         b = b + weight*x*y
         
-        theta = A.dot(b)
+        theta = Ainv.dot(b)
         
         if keep is True:
             self.theta = theta
-        
-        past_pred = self.X.dot(theta)
-        
+        # past_pred = self.X.dot(theta)
+
         pred = theta.dot(x)
 
-        past_mse = self.weights.dot((past_pred - self.y)**2)
+        # past_mse = self.weights.dot((past_pred - self.y)**2)
+        past_mse = self.get_mse() + theta.dot(A.dot(theta))
+        
         full_mse = past_mse + weight*(x.dot(theta) - y)**2
         
+        if keep is True:
+            A = A + weight*np.outer(x, x)
+            self.mse = full_mse
+
         return (pred, past_mse, full_mse)
 
     def fit_incremental_slow(self, x, y , weight = 1., keep = False):
@@ -209,7 +216,7 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
 
         mid = self.theta.dot(x)
         
-        half_width = np.sqrt(x.dot(self.A.dot(x)))*np.sqrt(delta)
+        half_width = np.sqrt(x.dot(self.Ainv.dot(x)))*np.sqrt(delta)
 
         return (mid - half_width, mid + half_width)
 

@@ -341,10 +341,14 @@ class RegressorUCB(Semibandit):
             m=model.get_dataset_size()
             
             # Binary search
-            # TODO: Get range params from the model
-            rmax = 1.
-            rmin = -1.
+            # Get worst-case range params from the model
             prec = 0.01 # TODO: Set based on gamma
+            # radius = self.delta
+            radius = prec
+            (rmin, rmax) = model.pred_range_coarse(xa, radius)
+            # rmax = 1.
+            # rmin = -1.
+
             
             lmin = prec
             # lmin = 1
@@ -353,14 +357,14 @@ class RegressorUCB(Semibandit):
             # lmax = 10
             # print(m)
             
-            radius = self.delta
+
             
             leader_mse = model.get_mse()
             
-            # r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
-            # r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+            r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
+            r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
 
-            (r_lower, r_upper) = model.pred_range(xa, radius)
+            # (r_lower, r_upper) = model.pred_range(xa, radius)
 
             # print("Action {} confidence range:".format(idx))
             # print((r_upper, r_lower))
@@ -422,7 +426,7 @@ class RegressorUCB(Semibandit):
         model --- is assumed to be an IncrementalRegressionModel
         '''
         
-        print("Binary search, r={}".format(r))
+        # print("Binary search, r={}".format(r))
 
         ll = lmin
         lh = lmax
@@ -437,16 +441,16 @@ class RegressorUCB(Semibandit):
                 
             lt = (ll + lh)/2.
 
-            (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
+            # (pred, past_mse, full_mse) = model.fit_incremental_slow(x, r, weight=1./lt, keep=False)
             (pred, past_mse, full_mse) = model.fit_incremental(x, r, weight=1./lt, keep=False)
             # print(1./lt)
             # print(min_mse)
             # print(ll, lh)
             # print(1./lt)
-            print("binary search iteration {}, gap {}, prec {}".format(it, lh - ll, prec))
-            print(1./lh, 1./ll)
-            print(1./lt)            
-            print(pred, model.get_mse(), past_mse, full_mse)
+            # print("binary search iteration {}, gap {}, prec {}".format(it, lh - ll, prec))
+            # print(1./lh, 1./ll)
+            # print(1./lt)            
+            # print(pred, model.get_mse(), past_mse, full_mse)
             # print(lt)
 
             # If model has regularization or isn't optimized well, we can have past_mse < min_mse.
