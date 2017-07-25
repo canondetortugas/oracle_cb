@@ -158,6 +158,8 @@ class RegressorUCB(Semibandit):
         self.training_points = []
         self.training_indices = [] #indices into history where we did full batch optimization
 
+        self.stack_actions = False
+
         self.leaders = None
 
         self.uncertain_t = None ## last time we were uncertain about the best action for a given context.
@@ -223,51 +225,67 @@ class RegressorUCB(Semibandit):
             
             # (Xs, Ys) -- sub-datasets split accoridng to which action was taken.
             
-            Xs = [np.zeros((m, self.B.d)) for idx in range(self.B.K)]
-            Ys = [np.zeros(m) for idx in range(self.B.K)]
-            subset_sizes = [0 for idx in range(self.B.K)]
-            
-            for item in self.history:
-                context = item[0]
-                # print(item)
-                # print(item[1])
-                
-                act = item[1][0] ### Assumes K = 1
-                reward = item[2]
-                weight = item[3]
-                
-                ss = subset_sizes[act]
-                Xs[act][ss] = context.get_ld_features()[act,:]
-                Ys[act][ss] = reward[act]
-                
-                subset_sizes[act] += 1
+            if self.stack_actions is True:
 
-            self.subset_sizes = subset_sizes
-                
-            self.leaders = []    
-                
-            for idx in range(self.B.K):
-                Xs[idx] = Xs[idx][:subset_sizes[idx]]
-                Ys[idx] = Ys[idx][:subset_sizes[idx]]
+                Xs = [np.zeros((m, self.B.d)) for idx in range(self.B.K)]
+                Ys = [np.zeros(m) for idx in range(self.B.K)]
+                subset_sizes = [0 for idx in range(self.B.K)]
             
-                # print("Action {} data:".format(idx))
-                # print(Xs[idx])
-                # print(Ys[idx])
+                for item in self.history:
+                    context = item[0]
+                    # print(item)
+                    # print(item[1])
+                
+                    act = item[1][0] ### Assumes K = 1
+                    reward = item[2]
+                    weight = item[3]p
+                
+                    ss = subset_sizes[act]
+                    Xs[act][ss] = context.get_ld_features()[act,:]
+                    Ys[act][ss] = reward[act]
+                
+                    subset_sizes[act] += 1
+
+                self.subset_sizes = subset_sizes
+
+                self.leaders = []
+
+                for idx in range(self.B.K):
+                    Xs[idx] = Xs[idx][:subset_sizes[idx]]
+                    Ys[idx] = Ys[idx][:subset_sizes[idx]]
+
+                    # print("Action {} data:".format(idx))
+                    # print(Xs[idx])
+                    # print(Ys[idx])
+
+                    pred = learning_alg()
+                    pred.fit(Xs[idx], Ys[idx])
+
+                    self.leaders.append(RegressionPolicy(pred))
+                    # print(pred.theta)
+            else: # self.stack_actions is False
+                X = np.zeros((m, self.B.d))
+                Y = np.zeros(m)
+
+                for (idx, item) in enumerate(history):
+                    context = item[0]
+                    act = item[1][0] ### Assumes K = 1
+                    reward = item[2]
+                    weight = item[3]
+                    X[idx] = context.get_ld_features()[act,:]
+                    Y[idx] = reward[act]
 
                 pred = learning_alg()
-                pred.fit(Xs[idx], Ys[idx])
-                
-                self.leaders.append(RegressionPolicy(pred))
-                # print(pred.theta)
-                
-            
+                pred.fit(X, Y)
+                self.leader = RegressionPolicy(pred)
+
             # self.leader, (X, Y, W) = Argmax.argmax2(self.B, self.history, policy_type = RegressionPolicy, learning_alg = self.learning_alg) #leader, dataset used to train leader
             
             # Y_pred = self.leader.model.predict(X)
             
             # self.leader_square_loss = metrics.mean_squared_error(Y, Y_pred)
             
-            self.training_indices.append(len(self.history)-1) # mark index into history where we updated.
+        self.training_indices.append(len(self.history)-1) # mark index into history where we updated.
         
         self.t += 1
         
@@ -297,12 +315,11 @@ class RegressorUCB(Semibandit):
             self.uncertain_t = self.t
             self.action = act
             return act
+
         
         # Upper and lower reward ranges predicted by regressors
         upper_range = np.zeros(self.B.K)
         lower_range = np.zeros(self.B.K)
-        
-        
         
         ######
         # compute confidence ranges
@@ -310,11 +327,16 @@ class RegressorUCB(Semibandit):
         for idx in range(self.B.K):
             
             # RegressionPolicy wrapping an IncrementalRegressionModel class.
-            leader = self.leaders[idx]
+
         
             # context features for current action
             xa=x.get_ld_features()[idx,:]
-            
+
+            if self.stack_actions is True:
+                leader = self.leaders[idx]
+            else:
+                leader = self.leader
+                
             model = leader.model
             m=model.get_dataset_size()
             
