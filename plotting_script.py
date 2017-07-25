@@ -14,7 +14,9 @@ Names = {
     'epsall_gb5': '$\epsilon$-GB5',
     'epsall_lin': '$\epsilon$-Lin',
     'lin': 'LinUCB',
-    'rucb_lin': 'RUCB-Lin'
+    'rucb_lin': 'RUCB-Lin',
+    'rucb_tree': 'RUCB-Tree',
+    'rucb_gb5': 'RUCB-GB5'
 }
 
 Styles = {
@@ -26,6 +28,8 @@ Styles = {
     'epsall_lin': ['g', 'dashed'],
     'lin': ['b', 'solid'],
     'rucb_lin': ['g', 'solid'],
+    'rucb_tree': ['r', 'solid'],
+    'rucb_gb5': ['k', 'solid'],
     }
 
 parser = argparse.ArgumentParser()
@@ -55,7 +59,7 @@ ax.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='of
 
 std = True
 legendHandles = []
-keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin', 'rucb_lin']
+keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin', 'rucb_lin', 'rucb_tree', 'rucb_gb5']
 for k in keys:
     params = []
     mus = []

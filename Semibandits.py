@@ -132,7 +132,6 @@ class RegressorUCB(Semibandit):
         B -- Semibandit Simulator
         learning_alg -- scikit learn regression algorithm.
                         Should support fit() and predict() methods.
-        TODO: Product of regressors vs. general regressor as an argument.
         """
         self.B = B
         if self.B.L is not 1:
@@ -147,18 +146,33 @@ class RegressorUCB(Semibandit):
 
         """
 
+        # Algorithm parameters ###################
+
+        self.stack_actions = False
+        self.cheat = True
+        
         self.pull_strategy = 'greedy'
         # self.pull_strategy = 'pull_if_uncertain'
         
         self.T = T ## max # rounds
-        self.t = 1 ## current round
         self.burn_in = 20 ## how many rounds before we start using algorithm
-        
+
+
+        # confidence parameters (mostly not used currently)
+        self.beta = 0.1 ## safety parameter
+        self.failure_prob = 0.05 ## failure probability
+        self.nu = np.log(2*T**2*self.B.K/self.failure_prob) ## ignoring class G size
+        self.kappa = 80
+        self.eps = self.T**(self.beta)*self.nu
+        self.delta = 1 ## arbitrary, updated at each timestep
+
+        ##########################################
+
+        self.t = 1 ## current round
+
         # points in time at which we do a full batch optimization
         self.training_points = []
         self.training_indices = [] #indices into history where we did full batch optimization
-
-        self.stack_actions = False
 
         self.leaders = None
 
@@ -174,7 +188,7 @@ class RegressorUCB(Semibandit):
             t *=2
         # while t + self.burn_in <= T:
         #     self.training_points.append(self.burn_in + t)
-        #     t += 100
+        #     t += 500
         
         self.reward = []
         self.opt_reward = []
@@ -183,14 +197,6 @@ class RegressorUCB(Semibandit):
         # Datapoints we've added to the dataset so far. In general size will be < self.t because we do not add at every round
         self.history = []
         
-        # Alg confidence parameters
-        
-        self.beta = 0.1 ## safety parameter
-        self.failure_prob = 0.05 ## failure probability
-        self.nu = np.log(2*T**2*self.B.K/self.failure_prob) ## ignoring class G size
-        self.kappa = 80
-        self.eps = self.T**(self.beta)*self.nu
-        self.delta = 1 ## arbitrary, updated at each timestep
 
     def update_confidence(self, i):
         self.eta = 1./np.sqrt(i)
@@ -339,30 +345,35 @@ class RegressorUCB(Semibandit):
                 
             model = leader.model
             m=model.get_dataset_size()
-            
-            # Binary search
-            # Get worst-case range params from the model
-            prec = 0.01 # TODO: Set based on gamma
-            # radius = self.delta
-            radius = prec
-            (rmin, rmax) = model.pred_range_coarse(xa, radius)
-            # rmax = 1.
-            # rmin = -1.
 
-            
-            lmin = prec
-            # lmin = 1
-            # lmax = m/prec
-            lmax = m+prec      #
-            # lmax = 10
-            # print(m)
-            
+            prec = 0.01 
 
-            
-            leader_mse = model.get_mse()
-            
-            r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
-            r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+            # Compute confidence range using binary search
+            if self.cheat == False:
+
+                # Binary search
+
+                # radius = self.delta
+                radius = prec
+                # Get worst-case range params from the model
+                (rmin, rmax) = model.pred_range_coarse(xa, radius)
+                lmin = prec
+                lmax = m+prec
+                # lmin = 1
+                # lmax = m/prec
+
+                # lmax = 10
+                # print(m)
+
+                leader_mse = model.get_mse()
+
+                r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
+                r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+
+            # Get confidence range for built-in model computation
+            else:
+                (r_lower, r_upper) = model.pred_range(xa, prec)
+
 
             # (r_lower, r_upper) = model.pred_range(xa, radius)
 
@@ -1071,6 +1082,10 @@ if __name__=='__main__':
     if Args.alg == "rucb":
         if Args.learning_alg == 'lin':
             learning_alg = lambda: Incremental.IncrementalLinearRegression(reg=1.)
+        elif Args.learning_alg == 'tree':
+            learning_alg = lambda: Incremental.IncrementalRegressionTree(max_depth=4)
+        elif Args.learning_alg == 'gb5':
+            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
         else:
             assert False, "not implemented"
         

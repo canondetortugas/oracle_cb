@@ -1,6 +1,9 @@
 import numpy as np
 import scipy.linalg as la
 
+from sklearn import tree
+from sklearn import ensemble
+
 class IncrementalModel():
 
     def __init__(self):
@@ -232,10 +235,185 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
       
 class IncrementalRegressionTree(IncrementalRegressionModel):
 
-    def __init__(self):
+    def __init__(self, max_depth = 2):
+        
+        self.model = tree.DecisionTreeRegressor(max_depth=max_depth)
+        
+        self.is_fit = False
+        
+    def get_dataset_size(self):
+        
+        assert self.is_fit
+        
+        return self.n
+        
+    def fit(self, X, y, weights = None):
+        
+        assert len(X.shape) == 2
+        
+        self.n = X.shape[0]
+        self.d = X.shape[1]
+       
+        assert self.n == len(y)
+       
+        self.X = X
+        self.y = y
+
+        self.model.fit(X,y)
+ 
+        # Collect additional statistics about the model
+        self.leaf_counts = {}
+
+        leaf_indices = self.model.apply(X)
+        for leaf in leaf_indices:
+            if leaf not in self.leaf_counts:
+                self.leaf_counts[leaf]=1
+            else:
+                self.leaf_counts[leaf]+=1
+
+        # print(self.leaf_counts)
+        
+        # self.mse =              # TODO
+        
+        self.is_fit = True
+        
+        return
+        
+    def get_mse(self):
+        pass
+        # assert self.is_fit
+        
+        # return self.mse
+        
+    def fit_incremental(self, x, y , weight = 1., keep = False):
+        pass
+
+    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+        pass
+    
+    def predict(self, X):
+        
+        assert self.is_fit
+
+        if len(X.shape)==1:
+            assert X.shape[0] == self.d
+        elif len(X.shape) ==2:
+            assert X.shape[1] == self.d
+        else:
+            assert False, "not implemented"
+        
+        return self.model.predict(X)
+
+    def pred_range(self, x, delta):
+
+        assert self.is_fit
+
+        if len(x.shape) ==1:
+            x = x.reshape(1, -1)
+
+        mid = self.model.predict(x)
+        
+        leaf = self.model.apply(x)[0]
+        leaf_count = self.leaf_counts[leaf]
+
+        half_width = np.sqrt(delta/leaf_count)
+
+        return (mid - half_width, mid + half_width)
+
+    def pred_range_coarse(self, x, delta):
         pass
         
 class IncrementalRegressionTreeEnsemble(IncrementalRegressionModel):
     
-    def __init__(self):
+    def __init__(self, n_estimators = 100, max_depth = 2):
+        
+        self.model = ensemble.GradientBoostingRegressor(n_estimators = n_estimators, max_depth=max_depth)
+        
+        self.is_fit = False
+        
+    def get_dataset_size(self):
+        
+        assert self.is_fit
+        
+        return self.n
+        
+    def fit(self, X, y, weights = None):
+        
+        assert len(X.shape) == 2
+        
+        self.n = X.shape[0]
+        self.d = X.shape[1]
+       
+        assert self.n == len(y)
+       
+        self.X = X
+        self.y = y
+
+        self.model.fit(X,y)
+
+        self.leaf_counts = []
+
+        for (idx, m) in enumerate(self.model.estimators_):
+            # Collect additional statistics about the model
+            model = m[0]        # strange indexing
+            leaf_counts = {}
+            leaf_indices = model.apply(X)
+            for leaf in leaf_indices:
+                if leaf not in leaf_counts:
+                    leaf_counts[leaf]=1
+                else:
+                    leaf_counts[leaf]+=1
+            self.leaf_counts.append(leaf_counts)
+
+        
+        self.is_fit = True
+        
+        return
+        
+    def get_mse(self):
+        pass
+        # assert self.is_fit
+        
+        # return self.mse
+        
+    def fit_incremental(self, x, y , weight = 1., keep = False):
+        pass
+
+    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+        pass
+    
+    def predict(self, X):
+        
+        assert self.is_fit
+
+        if len(X.shape)==1:
+            assert X.shape[0] == self.d
+        elif len(X.shape) ==2:
+            assert X.shape[1] == self.d
+        else:
+            assert False, "not implemented"
+        
+        return self.model.predict(X)
+
+    def pred_range(self, x, delta):
+
+        assert self.is_fit
+
+        if len(x.shape) ==1:
+            x = x.reshape(1, -1)
+
+        mid = self.model.predict(x)
+        total_half_width = 0.
+            
+        for (idx, count) in enumerate(self.leaf_counts):
+            est = self.model.estimators_[idx][0]
+
+            leaf = est.apply(x)[0]
+            leaf_count = self.leaf_counts[idx][leaf]
+
+            total_half_width +=np.sqrt(delta/leaf_count)
+
+        return (mid - total_half_width, mid + total_half_width)
+
+    def pred_range_coarse(self, x, delta):
         pass
