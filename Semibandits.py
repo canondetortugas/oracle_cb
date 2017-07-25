@@ -169,12 +169,12 @@ class RegressorUCB(Semibandit):
         self.lower_range = None
         
         t = 1
-        # while t + self.burn_in <= T:
-        #     self.training_points.append(self.burn_in + t)
-        #     t *=2
         while t + self.burn_in <= T:
             self.training_points.append(self.burn_in + t)
-            t += 100
+            t *=2
+        # while t + self.burn_in <= T:
+        #     self.training_points.append(self.burn_in + t)
+        #     t += 100
         
         self.reward = []
         self.opt_reward = []
@@ -238,7 +238,7 @@ class RegressorUCB(Semibandit):
                 
                     act = item[1][0] ### Assumes K = 1
                     reward = item[2]
-                    weight = item[3]p
+                    weight = item[3]
                 
                     ss = subset_sizes[act]
                     Xs[act][ss] = context.get_ld_features()[act,:]
@@ -267,7 +267,7 @@ class RegressorUCB(Semibandit):
                 X = np.zeros((m, self.B.d))
                 Y = np.zeros(m)
 
-                for (idx, item) in enumerate(history):
+                for (idx, item) in enumerate(self.history):
                     context = item[0]
                     act = item[1][0] ### Assumes K = 1
                     reward = item[2]
