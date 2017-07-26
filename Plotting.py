@@ -366,6 +366,8 @@ def read_dir(f):
         t2 = x.split("_")[1]
         t3 = x.split("_")[2]
         z = x.split("_")[-2]
+        # print(z)
+        # print(t3)
         data = np.loadtxt(f+x)
         t4 = x.split("_")[-1]
         if z=='rewards':

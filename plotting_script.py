@@ -7,9 +7,9 @@ import sys, argparse
 import Plotting
 
 Names = {
-    'mini_gb2': 'VC-GB2',
-    'mini_gb5': 'VC-GB5',   
-    'mini_lin': 'VC-Lin',
+    'mini_gb2': 'MM-GB2',
+    'mini_gb5': 'MM-GB5',   
+    'mini_lin': 'MM-Lin',
     'epsall_gb2': '$\epsilon$-GB2',
     'epsall_gb5': '$\epsilon$-GB5',
     'epsall_lin': '$\epsilon$-Lin',
@@ -24,11 +24,11 @@ Styles = {
     'mini_gb5': ['r', 'solid'],   
     'mini_lin': ['g', 'solid'],
     'epsall_gb2': ['k', 'dashed'],
-    'epsall_gb5': ['r', 'dashed'],
+    'epsall_gb5': ['y', 'dashed'],
     'epsall_lin': ['g', 'dashed'],
     'lin': ['b', 'solid'],
     'rucb_lin': ['g', 'solid'],
-    'rucb_tree': ['r', 'solid'],
+    'rucb_tree': ['y', 'solid'],
     'rucb_gb5': ['k', 'solid'],
     }
 
@@ -36,11 +36,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--save', dest='save', action='store_true')
 Args = parser.parse_args(sys.argv[1:])
 
-D1 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
-D2 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
-# D1 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
-# D2 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
-#D1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
+# D1 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
+# D2 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
+D1 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
+D2 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
+#d1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
 #D2 = Plotting.read_dir("./results/yahoo_T=40000_L=2_e=0.5/")
 print(D1[0].items())
 
@@ -79,11 +79,14 @@ for k in keys:
     stdev = np.array([B[ids[i], i] for i in range(len(ids))])
 
     if k == 'mini_gb5':
-        mu = np.mean(D1[0]['mini_gb5_0.008'], axis=0)[9::10]/x
-        stdev = 2/np.sqrt(len(D1[0]['mini_gb5_0.008']))*(np.std(D1[0]['mini_gb5_0.008'], axis=0)[9::10]/x)
+        mu = np.mean(D1[0]['mini_gb5_0.010'], axis=0)[9::10]/x
+        stdev = 2/np.sqrt(len(D1[0]['mini_gb5_0.010']))*(np.std(D1[0]['mini_gb5_0.010'], axis=0)[9::10]/x)
+    if k == 'rucb_gb5':
+        mu = np.mean(D1[0]['rucb_gb5_0.100'], axis=0)[9::10]/x
+        stdev = 2/np.sqrt(len(D1[0]['rucb_gb5_0.100']))*(np.std(D1[0]['rucb_gb5_0.100'], axis=0)[9::10]/x)
     l1 = ax1.plot(x,mu,rasterized=True, linewidth=2.0, label=Names[k], color=Styles[k][0], linestyle=Styles[k][1])
     legendHandles.append((matplotlib.patches.Patch(color=l1[0].get_color(), label=Names[k]), Names[k]))
-    if std and k=='mini_gb5' or k=='lin':
+    if std and k=='mini_gb5' or k=='lin' or 'rucb_gb5':
         ax1.fill_between(x,
                          mu - stdev,
                          mu + stdev,
@@ -107,9 +110,11 @@ for k in keys:
     mu = np.array([A[ids[i], i] for i in range(len(ids))])
     stdev = np.array([B[ids[i], i] for i in range(len(ids))])
 
+    # TODO update for RUCB stdev
+
     if k == 'mini_gb5':
-        mu = np.mean(D2[0]['mini_gb5_0.008'], axis=0)[9::10]/x
-        stdev = 2/np.sqrt(len(D2[0]['mini_gb5_0.008']))*(np.std(D2[0]['mini_gb5_0.008'], axis=0)[9::10]/x)
+        mu = np.mean(D2[0]['mini_gb5_0.010'], axis=0)[9::10]/x
+        stdev = 2/np.sqrt(len(D2[0]['mini_gb5_0.010']))*(np.std(D2[0]['mini_gb5_0.010'], axis=0)[9::10]/x)
 
     l1 = ax2.plot(x,mu,rasterized=True, linewidth=2.0, label=Names[k], color=Styles[k][0], linestyle=Styles[k][1])
     if std and k=='mini_gb5' or k=='lin':

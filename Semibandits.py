@@ -155,7 +155,7 @@ class RegressorUCB(Semibandit):
         # self.pull_strategy = 'pull_if_uncertain'
         
         self.T = T ## max # rounds
-        self.burn_in = 20 ## how many rounds before we start using algorithm
+        self.burn_in = 200 ## how many rounds before we start using algorithm
 
 
         # confidence parameters (mostly not used currently)
