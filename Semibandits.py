@@ -1088,7 +1088,8 @@ if __name__=='__main__':
         elif Args.learning_alg == 'tree':
             learning_alg = lambda: Incremental.IncrementalRegressionTree(max_depth=4)
         elif Args.learning_alg == 'gb5':
-            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
+            # learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
+            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble2(max_depth=5, n_estimators=100)
         else:
             assert False, "not implemented"
         

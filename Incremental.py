@@ -404,6 +404,7 @@ class IncrementalRegressionTreeEnsemble(IncrementalRegressionModel):
                     leaf_counts[leaf]+=1
             self.leaf_counts.append(leaf_counts)
 
+        # print(self.leaf_counts)
         
         self.is_fit = True
         
@@ -456,3 +457,153 @@ class IncrementalRegressionTreeEnsemble(IncrementalRegressionModel):
 
     def pred_range_coarse(self, x, delta):
         pass
+
+'''
+Same as IncrementalRegressionTreeEnsemble, but correctly implements least squares for range prediction.
+'''
+class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
+    
+    def __init__(self, n_estimators = 100, max_depth = 2):
+        
+        self.model = ensemble.GradientBoostingRegressor(n_estimators = n_estimators, max_depth=max_depth)
+        
+        self.is_fit = False
+        
+    def get_dataset_size(self):
+        
+        assert self.is_fit
+        
+        return self.n
+        
+    def fit(self, X, y, weights = None):
+        
+        assert len(X.shape) == 2
+        
+        self.n = X.shape[0]
+        self.d = X.shape[1]
+       
+        assert self.n == len(y)
+       
+        self.X = X
+        self.y = y
+
+        self.model.fit(X,y)
+
+        '''
+        Compute leaf statistics
+        '''
+
+        print("Precomputing leaf statistics")
+
+        self.leaf_counts = []
+
+        for (idx, m) in enumerate(self.model.estimators_):
+            # Collect additional statistics about the model
+            model = m[0]        # strange indexing
+            leaf_counts = {}
+            leaf_indices = model.apply(X)
+            idy = 0
+            # TODO replace dict with an array for hashing
+            leaf_order = {}
+            for (sample_idx, leaf) in enumerate(leaf_indices):
+                if leaf not in leaf_counts:
+                    leaf_counts[leaf]=1
+                    leaf_order[leaf] = idy
+                    idy += 1
+                else:
+                    leaf_counts[leaf]+=1
+            self.leaf_counts.append(leaf_counts)
+            self.leaf_orders.append(leaf_order)
+
+        self.n_trees = len(self.model.estimators_)
+
+        # dimension of feature space induced by tree ensemble
+        self.feature_dim = sum([len(lc) for lc in self.leaf_counts])
+        print("Number of ensemble features {}".format(self.feature_dim))
+
+        self.A = np.eye(self.feature_dim, self.feature_dim)
+
+        # TODO: Optimize -- should only take (#trees)^2 time per sample
+        for x in X:
+            feature_vec = self.get_ensemble_features(x)
+            self.A = self.A + np.outer(feature_vec, feature_vec)
+        self.Ainv = la.pinv(self.A)
+            
+        self.is_fit = True
+        
+        return
+
+    def get_ensemble_features(self,x):
+
+        feature_vec = np.zeros((1, self.feature_dim))
+        for (idx, m) in enumerate(self.model.estimators_):
+            leaf_idx = m.apply(x)[0]
+
+            feature_vec[leaf_orders[idx][leaf_idx]]=1
+        return feature_vec
+
+    def get_ensemble_feature_indices(self,x):
+
+        # feature_vec = np.zeros((1, self.feature_dim))
+        indices = []
+        for (idx, m) in enumerate(self.model.estimators_):
+            leaf_idx = m.apply(x)[0]
+            indices.append(leaf_orders[idx][leaf_idx])
+
+        return indices
+
+    def get_mse(self):
+        pass
+        # assert self.is_fit
+        
+        # return self.mse
+        
+    def fit_incremental(self, x, y , weight = 1., keep = False):
+        pass
+
+    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+        pass
+    
+    def predict(self, X):
+        
+        assert self.is_fit
+
+        if len(X.shape)==1:
+            assert X.shape[0] == self.d
+        elif len(X.shape) ==2:
+            assert X.shape[1] == self.d
+        else:
+            assert False, "not implemented"
+        
+        return self.model.predict(X)
+
+    def pred_range(self, x, delta):
+
+        assert self.is_fit
+
+        if len(x.shape) ==1:
+            x = x.reshape(1, -1)
+
+        mid = self.model.predict(x)
+
+        # Norm squared feature vector under X^(T)X (where X are featurized using tree ensemble)
+        val = 0.
+
+        indices = self.get_ensemble_feature_indices(x)
+        for idx in indices:
+            for idy in indices:
+
+                val += self.Ainv(idx, idy)
+
+            # est = self.model.estimators_[idx][0]
+
+            # leaf = est.apply(x)[0]
+            # leaf_count = self.leaf_counts[idx][leaf]
+
+        total_half_width = np.sqrt(val*delta)
+
+        return (mid - total_half_width, mid + total_half_width)
+
+    def pred_range_coarse(self, x, delta):
+        pass
+    
