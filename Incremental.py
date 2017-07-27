@@ -83,6 +83,7 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
             self.weights = np.ones(self.n)
         self.X = X
         self.y = y
+        self.y_norm = np.linalg.norm(self.y)
         
         W = np.diag(self.weights)
         
@@ -107,6 +108,9 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
         return self.mse
         
     def fit_incremental(self, x, y , weight = 1., keep = False):
+        '''
+        TODO: Fix keep option
+        '''
         
         assert self.is_fit
         
@@ -145,19 +149,50 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
 
         return (pred, past_mse, full_mse)
 
-    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+    def fit_incremental2(self, X, y, weights):
         '''
-        Test version of fit_incremental that refits the whole dataset
+        TODO: Fix keep option
         '''
         
         assert self.is_fit
         
-        # if keep is False:
-        #     A = self.A.copy()
-        #     b = self.b.copy()
-        # else:
-        #     A = self.A
-        #     b = self.b
+        assert len(X.shape)==2
+
+        for idx in range(X.shape[0]):
+            x = X[idx]
+            y = y[idx]
+            weight = weights[idx]
+
+            # update using sherman morrison (only works if A is invertible -- can be incorrect if regularization is turned off).
+            z = self.Ainv.dot(x)
+        
+            Ainv = self.Ainv - weight*np.outer(z, z)/(1 + weight*x.dot(z))
+
+            b = self.b + weight*x*y
+        
+            theta = Ainv.dot(b)
+        
+            past_mse = self.get_mse() + theta.dot(self.A.dot(theta))
+        
+            full_mse = past_mse + weight*(x.dot(theta) - y)**2
+
+            self.mse = full_mse
+            self.A = self.A + np.outer(x, x)*weight
+            self.Ainv = Ainv
+            self.b = b
+            self.theta = theta
+
+        return
+
+    def fit_incremental_slow(self, x, y , weight = 1., keep = False):
+        '''
+        Test version of fit_incremental that refits the whole dataset
+        TODO: Fix keep option
+        '''
+        
+        assert self.is_fit
+        
+
         
         # update using sherman morrison (only works if A is invertible -- can be incorrect if regularization is turned off).
 
@@ -187,6 +222,7 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
             self.theta = theta
             self.A = A
             self.b = b
+            # 
             self.weights = wp
             self.X = Xp
             self.y = yp
@@ -226,11 +262,14 @@ class IncrementalLinearRegression(IncrementalRegressionModel):
     def pred_range_coarse(self, x, delta):
         assert self.is_fit
 
-        mid = self.theta.dot(x)
+        # mid = self.theta.dot(x)
         
-        half_width = np.linalg.norm(x)*np.sqrt(delta)/self.reg
+        # half_width = np.linalg.norm(x)*np.sqrt(delta)/self.reg
 
-        return (mid - half_width, mid + half_width)
+        # return (mid - half_width, mid + half_width)
+
+        magnitude = 2*self.y_norm/np.sqrt(self.reg)
+        return (-magnitude, magnitude)
 
       
 class IncrementalRegressionTree(IncrementalRegressionModel):

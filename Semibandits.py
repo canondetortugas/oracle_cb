@@ -149,13 +149,16 @@ class RegressorUCB(Semibandit):
         # Algorithm parameters ###################
 
         self.stack_actions = False
-        self.cheat = True
+        self.cheat = False
         
         self.pull_strategy = 'greedy'
         # self.pull_strategy = 'pull_if_uncertain'
         
         self.T = T ## max # rounds
         self.burn_in = 200 ## how many rounds before we start using algorithm
+
+        self.radius = 0.05
+        self.prec = 0.001 # precision to within which we solve the constrained least squares problem
 
 
         # confidence parameters (mostly not used currently)
@@ -183,16 +186,16 @@ class RegressorUCB(Semibandit):
         self.lower_range = None
         
         t = 1
-        while t + self.burn_in <= T:
-            self.training_points.append(self.burn_in + t)
-            t *=2
         # while t + self.burn_in <= T:
         #     self.training_points.append(self.burn_in + t)
-        #     t += 500
+        #     t *=2
+        while t + self.burn_in <= T:
+            self.training_points.append(self.burn_in + t)
+            t += 200
         
         self.reward = []
         self.opt_reward = []
-#        self.dist = [1.0/self.B.N for i in range(self.B.N)]
+        # self.dist = [1.0/self.B.N for i in range(self.B.N)]
         
         # Datapoints we've added to the dataset so far. In general size will be < self.t because we do not add at every round
         self.history = []
@@ -346,7 +349,7 @@ class RegressorUCB(Semibandit):
             model = leader.model
             m=model.get_dataset_size()
 
-            prec = 0.01 
+            # prec = 0.01 
 
             # Compute confidence range using binary search
             if self.cheat == False:
@@ -354,11 +357,11 @@ class RegressorUCB(Semibandit):
                 # Binary search
 
                 # radius = self.delta
-                radius = prec
+                # radius = prec
                 # Get worst-case range params from the model
-                (rmin, rmax) = model.pred_range_coarse(xa, radius)
-                lmin = prec
-                lmax = m+prec
+                (rmin, rmax) = model.pred_range_coarse(xa, self.radius)
+                lmin = 0.
+                lmax = m+self.prec
                 # lmin = 1
                 # lmax = m/prec
 
@@ -367,12 +370,12 @@ class RegressorUCB(Semibandit):
 
                 leader_mse = model.get_mse()
 
-                r_upper = self._binary_search(model, xa, radius, rmax, prec, lmin, lmax, leader_mse)
-                r_lower = self._binary_search(model, xa, radius, rmin, prec, lmin, lmax, leader_mse)
+                r_upper = self._binary_search(model, xa, self.radius, rmax, self.prec, lmin, lmax, leader_mse)
+                r_lower = self._binary_search(model, xa, self.radius, rmin, self.prec, lmin, lmax, leader_mse)
 
             # Get confidence range for built-in model computation
             else:
-                (r_lower, r_upper) = model.pred_range(xa, prec)
+                (r_lower, r_upper) = model.pred_range(xa, self.prec)
 
 
             # (r_lower, r_upper) = model.pred_range(xa, radius)
