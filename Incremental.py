@@ -496,6 +496,7 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
         print("Precomputing leaf statistics")
 
         self.leaf_counts = []
+        self.leaf_orders = []
 
         for (idx, m) in enumerate(self.model.estimators_):
             # Collect additional statistics about the model
@@ -523,10 +524,16 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
 
         self.A = np.eye(self.feature_dim, self.feature_dim)
 
-        # TODO: Optimize -- should only take (#trees)^2 time per sample
+        # TODO: Should only take (#trees)^2 time per sample
         for x in X:
-            feature_vec = self.get_ensemble_features(x)
-            self.A = self.A + np.outer(feature_vec, feature_vec)
+            # feature_vec = self.get_ensemble_features(x.reshape((1,-1)))
+            # self.A = self.A + np.outer(feature_vec, feature_vec)
+            indices = self.get_ensemble_feature_indices(x.reshape((1,-1)))
+            for idx in indices:
+                for idy in indices:
+                    self.A[idx, idy] += 1
+            
+        print("Inverting...")
         self.Ainv = la.pinv(self.A)
             
         self.is_fit = True
@@ -537,9 +544,9 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
 
         feature_vec = np.zeros((1, self.feature_dim))
         for (idx, m) in enumerate(self.model.estimators_):
-            leaf_idx = m.apply(x)[0]
+            leaf_idx = m[0].apply(x)[0]
 
-            feature_vec[leaf_orders[idx][leaf_idx]]=1
+            feature_vec[0][self.leaf_orders[idx][leaf_idx]]=1
         return feature_vec
 
     def get_ensemble_feature_indices(self,x):
@@ -547,8 +554,8 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
         # feature_vec = np.zeros((1, self.feature_dim))
         indices = []
         for (idx, m) in enumerate(self.model.estimators_):
-            leaf_idx = m.apply(x)[0]
-            indices.append(leaf_orders[idx][leaf_idx])
+            leaf_idx = m[0].apply(x)[0]
+            indices.append(self.leaf_orders[idx][leaf_idx])
 
         return indices
 
@@ -578,6 +585,9 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
         return self.model.predict(X)
 
     def pred_range(self, x, delta):
+        '''
+        This method should take O((# trees)^2) time to compute, but otherwise be independent of # leaves and #data.
+        '''
 
         assert self.is_fit
 
@@ -593,7 +603,7 @@ class IncrementalRegressionTreeEnsemble2(IncrementalRegressionModel):
         for idx in indices:
             for idy in indices:
 
-                val += self.Ainv(idx, idy)
+                val += self.Ainv[idx, idy]
 
             # est = self.model.estimators_[idx][0]
 

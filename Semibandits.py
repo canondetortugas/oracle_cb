@@ -149,7 +149,7 @@ class RegressorUCB(Semibandit):
         # Algorithm parameters ###################
 
         self.stack_actions = False
-        self.cheat = False
+        self.cheat = True
         
         self.pull_strategy = 'greedy'
         # self.pull_strategy = 'pull_if_uncertain'
@@ -157,9 +157,8 @@ class RegressorUCB(Semibandit):
         self.T = T ## max # rounds
         self.burn_in = 200 ## how many rounds before we start using algorithm
 
-        self.radius = 0.05
+        self.radius = 0.01 # Bound on empirical least squares regret
         self.prec = 0.001 # precision to within which we solve the constrained least squares problem
-
 
         # confidence parameters (mostly not used currently)
         self.beta = 0.1 ## safety parameter
@@ -186,12 +185,12 @@ class RegressorUCB(Semibandit):
         self.lower_range = None
         
         t = 1
-        # while t + self.burn_in <= T:
-        #     self.training_points.append(self.burn_in + t)
-        #     t *=2
         while t + self.burn_in <= T:
             self.training_points.append(self.burn_in + t)
-            t += 200
+            t *=2
+        # while t + self.burn_in <= T:
+        #     self.training_points.append(self.burn_in + t)
+        #     t += 200
         
         self.reward = []
         self.opt_reward = []
@@ -1024,8 +1023,9 @@ if __name__=='__main__':
     parser.add_argument('--I', action='store', default=0, type=int)
     parser.add_argument('--noise', action='store', default=None)
     parser.add_argument('--alg', action='store' ,default='all', choices=['mini', 'eps', 'lin', 'rucb'])
-    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'tree', 'lin'])
+    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'gb5_fast', 'tree', 'lin'])
     parser.add_argument('--param', action='store', default=None)
+    # parser.add_argument('--fast', action='store', default=False, choices=[False, True])
     
     Args = parser.parse_args(sys.argv[1:])
     print(Args, flush=True)
@@ -1088,8 +1088,9 @@ if __name__=='__main__':
         elif Args.learning_alg == 'tree':
             learning_alg = lambda: Incremental.IncrementalRegressionTree(max_depth=4)
         elif Args.learning_alg == 'gb5':
-            # learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
             learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble2(max_depth=5, n_estimators=100)
+        elif Args.learning_alg =='gb5fast':
+            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
         else:
             assert False, "not implemented"
         
@@ -1100,6 +1101,9 @@ if __name__=='__main__':
             if os.path.isfile(outdir+"rucb_%s_%0.5f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I)):
                 print('---- ALREADY DONE ----')
                 sys.exit(0)
+
+            R.radius = Args.param
+
             start = time.time()
             # TODO: Change param string writing
             (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=None)

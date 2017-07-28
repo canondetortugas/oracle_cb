@@ -35,7 +35,8 @@ Names = {
     'mini_nn': 'VCNN',
     'rucb_lin': 'RUCB-Lin',
     'rucb_tree': 'RUCB-Tree',
-    'rucb_gb5': 'RUCB-GB5'
+    'rucb_gb5': 'RUCB-GB5',
+    'rucb_gb5fast': 'RUCB-GB5-Fast'
 }
 def PlotLinearExperiment(out):
     ks = [k for k in out.keys()]

@@ -16,7 +16,8 @@ Names = {
     'lin': 'LinUCB',
     'rucb_lin': 'RUCB-Lin',
     'rucb_tree': 'RUCB-Tree',
-    'rucb_gb5': 'RUCB-GB5'
+    'rucb_gb5': 'RUCB-GB5',
+    'rucb_gb5fast': 'RUCB-GB5-Fast'
 }
 
 Styles = {
@@ -30,6 +31,7 @@ Styles = {
     'rucb_lin': ['g', 'solid'],
     'rucb_tree': ['y', 'solid'],
     'rucb_gb5': ['k', 'solid'],
+    'rucb_gb5fast': ['m', 'solid'],
     }
 
 parser = argparse.ArgumentParser()
@@ -38,8 +40,8 @@ Args = parser.parse_args(sys.argv[1:])
 
 # D1 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
 # D2 = Plotting.read_dir("./results/mslr30k_T=12000_L=1_e=0.0/")
-D1 = Plotting.read_dir("./results/mslr30k_T=8000_L=1_e=0.0/")
-D2 = Plotting.read_dir("./results/mslr30k_T=8000_L=1_e=0.0/")
+D1 = Plotting.read_dir("./results/mslr30k_T=30000_L=1_e=0.0/")
+D2 = Plotting.read_dir("./results/mslr30k_T=30000_L=1_e=0.0/")
 # D1 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
 # D2 = Plotting.read_dir("./results/mslr30k_T=31278_L=1_e=0.0/")
 #d1 = Plotting.read_dir("./results/mslr30k_T=36000_L=3_e=0.1/")
@@ -61,7 +63,7 @@ ax.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='of
 
 std = True
 legendHandles = []
-keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin', 'rucb_lin', 'rucb_tree', 'rucb_gb5']
+keys = ['epsall_lin', 'mini_lin', 'epsall_gb2', 'mini_gb2', 'epsall_gb5', 'mini_gb5', 'lin', 'rucb_lin', 'rucb_tree', 'rucb_gb5', 'rucb_gb5fast']
 for k in keys:
     params = []
     mus = []
@@ -84,8 +86,8 @@ for k in keys:
         mu = np.mean(D1[0]['mini_gb5_0.010'], axis=0)[9::10]/x
         stdev = 2/np.sqrt(len(D1[0]['mini_gb5_0.010']))*(np.std(D1[0]['mini_gb5_0.010'], axis=0)[9::10]/x)
     if k == 'rucb_gb5':
-        mu = np.mean(D1[0]['rucb_gb5_0.100'], axis=0)[9::10]/x
-        stdev = 2/np.sqrt(len(D1[0]['rucb_gb5_0.100']))*(np.std(D1[0]['rucb_gb5_0.100'], axis=0)[9::10]/x)
+        mu = np.mean(D1[0]['rucb_gb5_0.010'], axis=0)[9::10]/x
+        stdev = 2/np.sqrt(len(D1[0]['rucb_gb5_0.010']))*(np.std(D1[0]['rucb_gb5_0.010'], axis=0)[9::10]/x)
     l1 = ax1.plot(x,mu,rasterized=True, linewidth=2.0, label=Names[k], color=Styles[k][0], linestyle=Styles[k][1])
     legendHandles.append((matplotlib.patches.Patch(color=l1[0].get_color(), label=Names[k]), Names[k]))
     if std and k=='mini_gb5' or k=='lin' or 'rucb_gb5':
