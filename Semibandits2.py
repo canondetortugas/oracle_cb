@@ -160,13 +160,13 @@ class RegressorUCB(Semibandit):
         self.radius = 0.01 # Bound on empirical least squares regret
         self.prec = 0.001 # precision to within which we solve the constrained least squares problem
 
-        # confidence parameters (mostly not used currently)
-        self.beta = 0.1 ## safety parameter
-        self.failure_prob = 0.05 ## failure probability
-        self.nu = np.log(2*T**2*self.B.K/self.failure_prob) ## ignoring class G size
-        self.kappa = 80
-        self.eps = self.T**(self.beta)*self.nu
-        self.delta = 1 ## arbitrary, updated at each timestep
+        # confidence parameters (not used currently)
+        # self.beta = 0.1 ## safety parameter
+        # self.failure_prob = 0.05 ## failure probability
+        # self.nu = np.log(2*T**2*self.B.K/self.failure_prob) ## ignoring class G size
+        # self.kappa = 80
+        # self.eps = self.T**(self.beta)*self.nu
+        # self.delta = 1 ## arbitrary, updated at each timestep
 
         ##########################################
 
@@ -200,11 +200,11 @@ class RegressorUCB(Semibandit):
         self.history = []
         
 
-    def update_confidence(self, i):
-        self.eta = 1./np.sqrt(i)
-        self.delta = self.kappa*self.eps/(float(i)-1)
-        self.eps = (self.T/float(i))**(self.beta)*self.nu
-        return
+    # def update_confidence(self, i):
+    #     self.eta = 1./np.sqrt(i)
+    #     self.delta = self.kappa*self.eps/(float(i)-1)
+    #     self.eps = (self.T/float(i))**(self.beta)*self.nu
+    #     return
        
     def update(self, x, act, y_vec, r):
         """
@@ -297,7 +297,7 @@ class RegressorUCB(Semibandit):
         
         self.t += 1
         
-        self.update_confidence(self.t) ## update confidence parameters
+        # self.update_confidence(self.t) ## update confidence parameters
 
 
     def _min_reward(self):
@@ -657,10 +657,11 @@ class LinUCB(Semibandit):
         Initialize the regression target and the 
         feature covariance. 
         """
+        self.reg = 1.
         self.T = T
         self.d = self.B.d
         self.b_vec = np.matrix(np.zeros((self.d,1)))
-        self.cov = np.matrix(np.eye(self.d))
+        self.cov = np.matrix(np.eye(self.d))*self.reg
         self.Cinv = scipy.linalg.inv(self.cov)
         self.weights = self.Cinv*self.b_vec
         self.t = 1
@@ -669,6 +670,8 @@ class LinUCB(Semibandit):
             self.delta = params['delta']
         else:
             self.delta = 0.05
+        print("LinUCB delta: {}".format(self.delta))
+
 
         self.reward = []
         self.opt_reward = []
@@ -755,6 +758,7 @@ class MiniMonster(Semibandit):
             self.mu = params['mu']
         else:
             self.mu = 1.0
+        self.op_iterations = 20
         self.num_unif = 0
         self.num_leader = 0
 
@@ -911,7 +915,7 @@ class MiniMonster(Semibandit):
 
         updated = True
         iterations = 0
-        while updated and iterations < 20:
+        while updated and iterations < self.op_iterations:
             print("OP Iteration")
             iterations += 1
             updated = False
@@ -1004,6 +1008,34 @@ class MiniMonster(Semibandit):
         p = (1.0-self._get_mu())*p + (self._get_mu())*float(self.B.L)/float(self.B.K)
         return p
 
+class Experiment(object):
+
+    def __init__(self, name, alg_name):
+
+        self.name = name
+
+        self.alg_name = alg_name
+
+        self.learning_alg = None
+        self.params = {}
+        self.learning_alg_params = {}
+
+        self.rewards = []
+        self.validation = []
+        self.time = []
+
+    def save(self, path):
+
+        with open(path, 'wb') as f:
+            
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(path):
+
+        with open(path) as f:
+
+            return pickle.load(f, 'rb')
 
 
 if __name__=='__main__':
@@ -1020,11 +1052,13 @@ if __name__=='__main__':
                         help='number of rounds', type=int)
     parser.add_argument('--dataset', action='store', choices=['synth','mq2007','mq2008', 'yahoo', 'mslr', 'mslrsmall', 'mslr30k', 'xor', 'static_linear'])
     # parser.add_argument('--L', action='store', default=5, type=int)
-    parser.add_argument('--I', action='store', default=0, type=int)
+    # parser.add_argument('--I', action='store', default=0, type=int)
     # parser.add_argument('--noise', action='store', default=None)
     parser.add_argument('--alg', action='store' ,default='all', choices=['mini', 'eps', 'lin', 'rucb'])
-    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'gb5_fast', 'tree', 'lin'])
+    parser.add_argument('--name', action='store' ,default='default')
+    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'gb5fast', 'tree', 'lin'])
     parser.add_argument('--param', action='store', default=None)
+    parser.add_argument('--outdir', action='store', default=None)
     # parser.add_argument('--fast', action='store', default=False, choices=[False, True])
     
     Args = parser.parse_args(sys.argv[1:])
@@ -1032,12 +1066,17 @@ if __name__=='__main__':
 
     Args.noise = None
     Args.L = 1
-    
-    # outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
-    outdir = './results/mslr30k_rucb_best_30k/'
+
+    if Args.outdir is None:
+        outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
+    else:
+        outdir = './results/' + Args.outdir + '/'
+        
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
     
+    print("Run name: {}".format(Args.name))
+
     # if Args.noise is not None:
     #     Args.noise = float(Args.noise)
     #     outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
@@ -1064,145 +1103,215 @@ if __name__=='__main__':
     else:
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
     
-    # if Args.dataset != 'yahoo':
-    #     Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
-
-    # if Args.dataset == 'mslr30k' and Args.I < 20:
-        # order = np.load(settings.DATA_DIR+"mslr/mslr30k_train_%d.npz" % (Args.I))
-        # print("Setting order for Iteration %d" % (Args.I), flush=True)
-        # B.contexts.order = order['order']
-        # B.contexts.curr_idx = 0
-    # if Args.dataset == 'yahoo' and Args.I < 20:
-        # order = np.load(settings.DATA_DIR+"yahoo/yahoo_train_%d.npz" % (Args.I))
-        # print("Setting order for Iteration %d" % (Args.I), flush=True)
-        # B.contexts.order = order['order']
-        # B.contexts.curr_idx = 0
-
-    # print("Setting seed for Iteration %d" % (Args.I), flush=True)
-    # B.set_seed(Args.I)
-
     learning_alg = None
+    learning_alg_params = {}
     if Args.learning_alg == "gb2":
-        learning_alg = lambda: sklearn.ensemble.GradientBoostingRegressor(n_estimators=100, max_depth=2)
+        max_depth = 5
+        n_estimators =100
+        learning_alg = lambda: sklearn.ensemble.GradientBoostingRegressor(n_estimators=n_estimators, max_depth=max_depth)
+        learning_alg_params['max_depth'] = max_depth
+        learning_alg_params['n_estimators'] = n_estimators
     elif Args.learning_alg == "gb5":
-        learning_alg = lambda: sklearn.ensemble.GradientBoostingRegressor(n_estimators=100, max_depth=5)
+        max_depth = 5
+        n_estimators =100
+        learning_alg = lambda: sklearn.ensemble.GradientBoostingRegressor(n_estimators=n_estimators, max_depth=max_depth)
+        learning_alg_params['max_depth'] = max_depth
+        learning_alg_params['n_estimators'] = n_estimators
     elif Args.learning_alg == "tree":
-        learning_alg = lambda: sklearn.tree.DecisionTreeRegressor(max_depth=2)
+        max_depth = 2
+        learning_alg = lambda: sklearn.tree.DecisionTreeRegressor(max_depth=max_depth)
+        learning_alg_params['max_depth'] = max_depth
     elif Args.learning_alg == "lin":
         learning_alg = lambda: sklearn.linear_model.LinearRegression()
     
     if Args.alg == "rucb":
+
+        exp = Experiment(Args.name, 'rucb')
+        exp.learning_alg = Args.learning_alg
+        
         if Args.learning_alg == 'lin':
-            learning_alg = lambda: Incremental.IncrementalLinearRegression(reg=1.)
+            reg = 1.
+            learning_alg = lambda: Incremental.IncrementalLinearRegression(reg=reg)
+            exp.learning_alg_params['reg']= reg
         elif Args.learning_alg == 'tree':
-            learning_alg = lambda: Incremental.IncrementalRegressionTree(max_depth=4)
+            max_depth = 4
+            learning_alg = lambda: Incremental.IncrementalRegressionTree(max_depth=max_depth)
+            exp.learning_alg_params['max_depth'] = max_depth
         elif Args.learning_alg == 'gb5':
-            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble2(max_depth=5, n_estimators=100)
+            max_depth = 5
+            n_estimators =100
+            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble2(max_depth=max_depth, n_estimators=n_estimators)
+            exp.learning_alg_params['max_depth'] = max_depth
+            exp.learning_alg_params['n_estimators'] = n_estimators
         elif Args.learning_alg =='gb5fast':
-            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=5, n_estimators=100)
+            max_depth = 5
+            n_estimators =100
+            learning_alg = lambda: Incremental.IncrementalRegressionTreeEnsemble(max_depth=max_depth, n_estimators=n_estimators)
+            exp.learning_alg_params['max_depth'] = max_depth
+            exp.learning_alg_params['n_estimators'] = n_estimators
         else:
             assert False, "not implemented"
         
         print('Using RegressorUCB with model {}'.format(Args.learning_alg))
-        
-        R = RegressorUCB(B, learning_alg=learning_alg)
-        if Args.param is not None:
-            if os.path.isfile(outdir+"rucb_%s_%0.5f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
 
-            R.radius = Args.param
-
-            start = time.time()
-            # TODO: Change param string writing
-            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=None)
-            stop = time.time()
-            # TODO: Don't write param string
-            np.savetxt(outdir+"rucb_%s_%0.5f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
-            np.savetxt(outdir+"rucb_%s_%0.5f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
-            np.savetxt(outdir+"rucb_%s_%0.5f_time_%d.out" % (Args.learning_alg, Args.param, Args.I), np.array([stop-start]))
+        outpath=outdir+"rucb_%s_%0.5f_%s.out" % (Args.learning_alg, Args.param,Args.name)
+        if os.path.isfile(outpath):
+            print('---- ALREADY DONE ----')
+            sys.exit(0)
         else:
-            if os.path.isfile(outdir+"rucb_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=Bval)
-            stop = time.time()
-            np.savetxt(outdir+"rucb_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
-            np.savetxt(outdir+"rucb_%s_default_validation_%d.out" % (Args.learning_alg, Args.I), val_tmp)
-            np.savetxt(outdir+"rucb_%s_default_time_%d.out" % (Args.learning_alg, Args.I), np.array([stop-start]))
+            print('Writing to {}'.format(outpath))
+
+        R = RegressorUCB(B, learning_alg=learning_alg)
+        R.radius = Args.param
+
+        #### Run experiment and write results
+
+
+        start = time.time()
+        (r,reg,val_tmp) = R.play(Args.T, verbose=True, validate=None)
+        stop = time.time()
+
+        exp.params['radius'] = R.radius
+        exp.params['cheat'] = R.cheat
+        exp.params['burn_in'] = R.burn_in
+        exp.params['prec'] = R.prec
+        exp.params['stack_actions']=R.stack_actions
+        exp.params['training_points']=R.training_points
+        
+        exp.rewards = r
+        exp.validation = val_tmp
+        exp.time = np.array([stop-start])
+
+        exp.save(outpath)
+
 
     if Args.alg == "lin":
         L = LinUCB(B)
-        if Args.param is not None:
-            if os.path.isfile(outdir+"lin_%0.5f_rewards_%d.out" % (Args.param,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval, params={'delta': Args.param})
-            stop = time.time()
-            np.savetxt(outdir+"lin_%0.5f_rewards_%d.out" % (Args.param,Args.I), r)
-            np.savetxt(outdir+"lin_%0.5f_validation_%d.out" % (Args.param,Args.I), val_tmp)
-            np.savetxt(outdir+"lin_%0.5f_time_%d.out" % (Args.param, Args.I), np.array([stop-start]))
+
+        exp = Experiment(Args.name, 'lin')
+
+        outpath=outdir+outdir+"lin_%0.5f_%s.out" % (Args.param,Args.name)
+        if os.path.isfile(outpath):
+            print('---- ALREADY DONE ----')
+            sys.exit(0)
         else:
-            if os.path.isfile(outdir+"lin_default_rewards_%d.out" % (Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval)
-            stop = time.time()
-            np.savetxt(outdir+"lin_default_rewards_%d.out" % (Args.I), r)
-            np.savetxt(outdir+"lin_default_validation_%d.out" % (Args.I), val_tmp)
-            np.savetxt(outdir+"lin_default_time_%d.out" % (Args.I), np.array([stop-start]))
+            print('Writing to {}'.format(outpath))
+
+        start = time.time()
+        (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval, params={'delta': Args.param})
+        stop = time.time()
+
+        exp.params['delta'] = L.delta
+        exp.params['reg'] = L.reg
+        
+        exp.rewards = r
+        exp.validation = val_tmp
+        exp.time = np.array([stop-start])
+
+        exp.save(outpath)
+
+    #     np.savetxt(outdir+"lin_%0.5f_rewards_%d.out" % (Args.param,Args.I), r)nnnn
+    #     np.savetxt(outdir+"lin_%0.5f_validation_%d.out" % (Args.param,Args.I), val_tmp)
+    #     np.savetxt(outdir+"lin_%0.5f_time_%d.out" % (Args.param, Args.I), np.array([stop-start]))
+    # # else:
+        #     if os.path.isfile(outdir+"lin_default_rewards_%d.out" % (Args.I)):
+        #         print('---- ALREADY DONE ----')
+        #         sys.exit(0)
+        #     start = time.time()
+        #     (r,reg,val_tmp) = L.play(Args.T, verbose=True, validate=Bval)
+        #     stop = time.time()
+        #     np.savetxt(outdir+"lin_default_rewards_%d.out" % (Args.I), r)
+        #     np.savetxt(outdir+"lin_default_validation_%d.out" % (Args.I), val_tmp)
+        #     np.savetxt(outdir+"lin_default_time_%d.out" % (Args.I), np.array([stop-start]))
+        
     if Args.alg == "mini":
         if learning_alg is None:
             print("Cannot run MiniMonster without learning algorithm")
             sys.exit(1)
+
+        exp = Experiment(Args.name, 'mini')
+        exp.learning_alg = Args.learning_alg
+
         M = MiniMonster(B, learning_alg = learning_alg, classification=False)
-        if Args.param is not None:
-            if os.path.isfile(outdir+"mini_%s_%0.3f_rewards_%d.out" % (Args.learning_alg,Args.param,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = M.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'mu': Args.param})
-            stop = time.time()
-            np.savetxt(outdir+"mini_%s_%0.3f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
-            np.savetxt(outdir+"mini_%s_%0.3f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
-            np.savetxt(outdir+"mini_%s_%0.3f_time_%d.out" % (Args.learning_alg, Args.param, Args.I), np.array([stop-start]))
+
+        outpath = outdir+"mini_%s_%0.3f_%s.out" % (Args.learning_alg,Args.param,Args.name)
+        if os.path.isfile(outpath):
+            print('---- ALREADY DONE ----')
+            sys.exit(0)
         else:
-            if os.path.isfile(outdir+"mini_%s_default_rewards_%d.out" % (Args.learning_alg,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = M.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L)})
-            stop = time.time()
-            np.savetxt(outdir+"mini_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
-            np.savetxt(outdir+"mini_%s_default_validation_%d.out" % (Args.learning_alg,Args.I), val_tmp)
-            np.savetxt(outdir+"mini_%s_default_time_%d.out" % (Args.learning_alg,Args.I), np.array([stop-start]))
+            print('Writing to {}'.format(outpath))
+        
+
+        start = time.time()
+        (r,reg,val_tmp) = M.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'mu': Args.param})
+        stop = time.time()
+        exp.rewards = r
+        exp.validation = val_tmp
+        exp.time = np.array([stop-start])
+
+        exp.params['training_points']=M.training_points
+        exp.params['mu']=M.mu
+        exp.params['op_iterations']=M.op_iterations
+        exp.learning_alg_params = learning_alg_params
+
+        exp.save(outpath)
+        
+        # np.savetxt(outdir+"mini_%s_%0.3f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
+        # np.savetxt(outdir+"mini_%s_%0.3f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
+        # np.savetxt(outdir+"mini_%s_%0.3f_time_%d.out" % (Args.learning_alg, Args.param, Args.I), np.array([stop-start]))
+        # else:
+        #     if os.path.isfile(outdir+"mini_%s_default_rewards_%d.out" % (Args.learning_alg,Args.I)):
+        #         print('---- ALREADY DONE ----')
+        #         sys.exit(0)
+        #     start = time.time()
+        #     (r,reg,val_tmp) = M.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L)})
+        #     stop = time.time()
+        #     np.savetxt(outdir+"mini_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
+        #     np.savetxt(outdir+"mini_%s_default_validation_%d.out" % (Args.learning_alg,Args.I), val_tmp)
+        #     np.savetxt(outdir+"mini_%s_default_time_%d.out" % (Args.learning_alg,Args.I), np.array([stop-start]))
         
     if Args.alg == "eps":
         if learning_alg is None:
             print("Cannot run EpsGreedy without learning algorithm")
             sys.exit(1)
+
+        outpath = outdir+"epsall_%s_%0.3f_%s.out" % (Args.learning_alg,Args.param,Args.name)
+        if os.path.isfile(outdir+"epsall_%s_%0.3f_rewards_%d.out" % (Args.learning_alg,Args.param,Args.I)):
+            print('---- ALREADY DONE ----')
+            sys.exit(0)
+            
         E = EpsGreedy(B, learning_alg = learning_alg, classification=False)
-        if Args.param is not None:
-            if os.path.isfile(outdir+"epsall_%s_%0.3f_rewards_%d.out" % (Args.learning_alg,Args.param,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = E.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'eps': Args.param, 'train_all': True})
-            stop = time.time()
-            np.savetxt(outdir+"epsall_%s_%0.3f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
-            np.savetxt(outdir+"epsall_%s_%0.3f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
-            np.savetxt(outdir+"epsall_%s_%0.3f_time_%d.out" % (Args.learning_alg, Args.param,Args.I), np.array([stop-start]))
-        else:
-            if os.path.isfile(outdir+"epsall_%s_default_rewards_%d.out" % (Args.learning_alg,Args.I)):
-                print('---- ALREADY DONE ----')
-                sys.exit(0)
-            start = time.time()
-            (r,reg,val_tmp) = E.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'train_all': True})
-            stop = time.time()
-            np.savetxt(outdir+"epsall_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
-            np.savetxt(outdir+"epsall_%s_default_validation_%d.out" % (Args.learning_alg,Args.I), val_tmp)
-            np.savetxt(outdir+"epsall_%s_default_time_%d.out" % (Args.learning_alg,Args.I), np.array([stop-start]))
+
+        exp = Experiment(Args.name, 'eps')
+        exp.learning_alg = Args.learning_alg
+        
+        # if Args.param is not None:
+           
+        start = time.time()
+        (r,reg,val_tmp) = E.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'eps': Args.param, 'train_all': True})
+        stop = time.time()
+
+        exp.rewards = r
+        exp.validation = val_tmp
+        exp.time = np.array([stop-start])
+
+        exp.learning_alg_params = learning_alg_params
+        exp.params['eps']=E.eps
+        exp.params['training_points'] = E.training_points
+
+        exp.save(outpath)
+        
+        # np.savetxt(outdir+"epsall_%s_%0.3f_rewards_%d.out" % (Args.learning_alg, Args.param,Args.I), r)
+        # np.savetxt(outdir+"epsall_%s_%0.3f_validation_%d.out" % (Args.learning_alg, Args.param,Args.I), val_tmp)
+        # np.savetxt(outdir+"epsall_%s_%0.3f_time_%d.out" % (Args.learning_alg, Args.param,Args.I), np.array([stop-start]))
+        # else:
+        #     if os.path.isfile(outdir+"epsall_%s_default_rewards_%d.out" % (Args.learning_alg,Args.I)):
+        #         print('---- ALREADY DONE ----')
+        #         sys.exit(0)
+        #     start = time.time()
+        #     (r,reg,val_tmp) = E.play(Args.T, verbose=True, validate=Bval, params={'weight': np.ones(Args.L), 'train_all': True})
+        #     stop = time.time()
+        #     np.savetxt(outdir+"epsall_%s_default_rewards_%d.out" % (Args.learning_alg, Args.I), r)
+        #     np.savetxt(outdir+"epsall_%s_default_validation_%d.out" % (Args.learning_alg,Args.I), val_tmp)
+        #     np.savetxt(outdir+"epsall_%s_default_time_%d.out" % (Args.learning_alg,Args.I), np.array([stop-start]))
     print("---- DONE ----")
