@@ -136,7 +136,6 @@ class RegressorUCB(Semibandit):
         self.B = B
         if self.B.L is not 1:
             raise NotImplementedError('Semibandit functionality not implemented')    
-        
 
     def init(self, T, params={}):
         """
@@ -1020,6 +1019,8 @@ class Experiment(object):
         self.params = {}
         self.learning_alg_params = {}
 
+        self.dataset = None
+
         self.rewards = []
         self.validation = []
         self.time = []
@@ -1033,9 +1034,9 @@ class Experiment(object):
     @staticmethod
     def load(path):
 
-        with open(path) as f:
+        with open(path, 'rb') as f:
 
-            return pickle.load(f, 'rb')
+            return pickle.load(f)
 
 
 if __name__=='__main__':
@@ -1128,6 +1129,7 @@ if __name__=='__main__':
 
         exp = Experiment(Args.name, 'rucb')
         exp.learning_alg = Args.learning_alg
+        exp.dataset = Args.dataset
         
         if Args.learning_alg == 'lin':
             reg = 1.
@@ -1189,6 +1191,7 @@ if __name__=='__main__':
         L = LinUCB(B)
 
         exp = Experiment(Args.name, 'lin')
+        exp.dataset = Args.dataset
 
         outpath=outdir+outdir+"lin_%0.5f_%s.out" % (Args.param,Args.name)
         if os.path.isfile(outpath):
@@ -1231,6 +1234,7 @@ if __name__=='__main__':
 
         exp = Experiment(Args.name, 'mini')
         exp.learning_alg = Args.learning_alg
+        exp.dataset = Args.dataset
 
         M = MiniMonster(B, learning_alg = learning_alg, classification=False)
 
@@ -1284,6 +1288,7 @@ if __name__=='__main__':
 
         exp = Experiment(Args.name, 'eps')
         exp.learning_alg = Args.learning_alg
+        exp.dataset = Args.dataset
         
         # if Args.param is not None:
            

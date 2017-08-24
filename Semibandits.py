@@ -1023,7 +1023,7 @@ if __name__=='__main__':
     parser.add_argument('--I', action='store', default=0, type=int)
     # parser.add_argument('--noise', action='store', default=None)
     parser.add_argument('--alg', action='store' ,default='all', choices=['mini', 'eps', 'lin', 'rucb'])
-    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'gb5_fast', 'tree', 'lin'])
+    parser.add_argument('--learning_alg', action='store', default=None, choices=[None, 'gb2', 'gb5', 'gb5fast', 'tree', 'lin'])
     parser.add_argument('--param', action='store', default=None)
     # parser.add_argument('--fast', action='store', default=False, choices=[False, True])
     
@@ -1033,20 +1033,22 @@ if __name__=='__main__':
     Args.noise = None
     Args.L = 1
     
-    # outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
-    outdir = './results/mslr30k_rucb_best_30k/'
-    if not os.path.isdir(outdir):
-        os.mkdir(outdir)
+    #outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
+    #outdir = './results/mslr30k_rucb_best_30k/'
+    # if not os.path.isdir(outdir):
+    #     os.mkdir(outdir)
     
-    # if Args.noise is not None:
-    #     Args.noise = float(Args.noise)
-    #     outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
-    #     if not os.path.isdir(outdir):
-    #         os.mkdir(outdir)
-    # else:
-    #     outdir = './results/%s_T=%d_L=%d_e=0.0/' % (Args.dataset, Args.T, Args.L)
-    #     if not os.path.isdir(outdir):
-    #         os.mkdir(outdir)
+    if Args.noise is not None:
+        Args.noise = float(Args.noise)
+        outdir = './results/%s_T=%d_L=%d_e=%0.1f/' % (Args.dataset, Args.T, Args.L, Args.noise)
+        if not os.path.isdir(outdir):
+            os.mkdir(outdir)
+    else:
+        outdir = './results/%s_T=%d_L=%d_e=0.0/' % (Args.dataset, Args.T, Args.L)
+        if not os.path.isdir(outdir):
+            os.mkdir(outdir)
+
+
 
     if Args.param is not None:
         Args.param = float(Args.param)
@@ -1059,7 +1061,7 @@ if __name__=='__main__':
     Bval = None
     if Args.dataset == 'static_linear':
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
-    elif Args.dataset == 'mslr30k':
+    elif Args.dataset == 'mslr30k' or Args.dataset == 'yahoo':
         Bval = None
     else:
         Bval = Simulators.DatasetBandit(dataset=Args.dataset, L=Args.L, loop=False, metric=None, noise=Args.noise)
